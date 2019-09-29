@@ -1,3 +1,5 @@
+resources
+.ipynb_checkpoints
 venv
 img
 requeriments.txt
