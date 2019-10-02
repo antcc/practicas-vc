@@ -87,11 +87,14 @@ def print_multiple_im(vim, titles = ""):
 # BONUS 1
 #
 
-def convolution2D(im, vx, vy):
+def convolution2D(im, vx, vy, border_type = cv2.BORDER_DEFAULT, value = 0):
     """Aplica convolución 2D a partir de dos máscaras 1D, y devuelve la imagen resultante.
         - im: imagen sobre la que convolucionar. No se modifica.
         - vx: máscara 1D para las filas. Debe ser de tamaño impar.
-        - vy: máscara 1D para las columnas. Debe ser de tamaño impar."""
+        - vy: máscara 1D para las columnas. Debe ser de tamaño impar.
+        - border_type: especifica la estrategia a seguir al aplicar la máscara en los
+        bordes.
+        - value: si border_type = BORDER_CONSTANT, indica el color del borde."""
 
     # Tamaño de la imagen
     nrows = im.shape[0]
@@ -100,28 +103,26 @@ def convolution2D(im, vx, vy):
     # Píxeles "extra" en los bordes de cada dimensión
     kx = int((len(vx) - 1) / 2)
     ky = int((len(vy) - 1) / 2)
-    zerosx = np.zeros(kx)
-    zerosy = np.zeros(ky)
 
-    im_res = np.copy(im) # No modificamos la original
+    # TODO hacerlo para RGB #TODO no funciona bien (borde inferior)
 
-    # Aplicamos la máscara por filas # TODO cambiar por un map #TODO los bordes
-    for i in range(nrows):
-        row = np.hstack((zerosx, im[i], zerosx))
-        im_res[i] = np.convolve(row, vx, 'valid')
+    im_res = cv2.copyMakeBorder(im, ky, ky, kx, kx, border_type, value)
 
-    # Aplicamos la máscara por columnas # TODO cambiar por un map #TODO los bordes
-    for j in range(ncols):
-        col = np.hstack((zerosy, im_res[:,j], zerosy))
-        im_res[:,j] = np.convolve(col, vy, 'valid')
+    # Aplicamos la máscara por filas
+    for i in range(ky, nrows + ky):
+        im_res[i] = np.convolve(im_res[i], vx, 'same')
 
-    return im_res
+    # Aplicamos la máscara por columnas
+    for j in range(kx, ncols + kx):
+        im_res[:,j] = np.convolve(im_res[:,j], vy, 'same')
+
+    return im_res[ky:-ky, kx:-kx]
 
 #
 # EJERCICIO 1
 #
 
-def gaussian2D(im, ksize, sX = 0, sY = 0, border = cv2.BORDER_DEFAULT):
+def gaussian2D(im, ksize, sX = 0, sY = 0, border_type = cv2.BORDER_DEFAULT):
     """Devuelve el resultado de aplicar una máscara gaussiana 2D a una imagen.
         - im: imagen original. No se modifica.
         - ksize = (width, height): tupla que indica el tamaño del kernel. Ambos valores
@@ -129,27 +130,30 @@ def gaussian2D(im, ksize, sX = 0, sY = 0, border = cv2.BORDER_DEFAULT):
         - sX: desviación típica en la dirección horizontal. Si es 0 se calcula a partir de
         ksize.
         - sY: desviación típica en la dirección vertical. Si es 0 coincide con sX.
-        - border: especifica la estrategia a seguir al aplicar la máscara en los bordes.
-        Sus posibles valores son: cv.BORDER_CONSTANT, cv.BORDER_REPLICATE, cv.BORDER_REFLECT,
-        cv.BORDER_WRAP, cv.BORDER_REFLECT_101, cv.BORDER_TRANSPARENT, cv.BORDER_REFLECT101,
-        cv.BORDER_DEFAULT, cv.BORDER_ISOLATED."""
+        - border_type: especifica la estrategia a seguir al aplicar la máscara en los
+        bordes."""
 
-    return cv2.GaussianBlur(im, ksize, sX, sY, border)
+    return cv2.GaussianBlur(im, ksize, sX, sY, border_type)
 
 def ex1A():
     """Ejemplo de ejecución del ejercicio 1, apartado A."""
+
+    N = 15
+    M = 15
 
     # Leemos las imágenes
     im = read_im(IM1, 1)
     im_gray = read_im(IM1, 0)
 
     # Gaussiana
-    im1 = gaussian2D(im_gray, (9, 9))
+    im1 = gaussian2D(im_gray, (N, M))
 
     # Derivadas
-    vx = [1.0 / 9 for i in range(9)]
-    vy = [1.0 / 9 for i in range(9)]
-    im2 = convolution2D(im_gray, vx, vy)
+    vx = [1.0 / N for i in range(N)]
+    vy = [1.0 / M for i in range(M)]
+    gauss_ker_x = cv2.getGaussianKernel(N, 0).flatten()
+    gauss_ker_y = cv2.getGaussianKernel(M, 0).flatten()
+    im2 = convolution2D(im_gray, gauss_ker_x, gauss_ker_y)
 
     # Imprimimos los resultados
     print_multiple_im([im_gray, im1, im2],
