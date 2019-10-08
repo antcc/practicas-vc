@@ -1,3 +1,4 @@
-Sus posibles valores son: cv.BORDER_CONSTANT, cv.BORDER_REPLICATE, cv.BORDER_REFLECT,
-cv.BORDER_WRAP, cv.BORDER_REFLECT_101, cv.BORDER_TRANSPARENT, cv.BORDER_REFLECT101,
-cv.BORDER_DEFAULT, cv.BORDER_ISOLATED.
+Rango 1: https://math.stackexchange.com/questions/1545118/a-rank-one-matrix-is-the-product-of-two-vectors
+SVD: https://en.wikipedia.org/wiki/Singular_value_decomposition
+
+Demostración:
