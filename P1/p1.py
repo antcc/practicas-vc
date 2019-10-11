@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 # coding: utf-8
+# uso: ./p1.py
 
 ##########################################################################
 # Visión por Computador. Curso 2019/20.
@@ -156,7 +157,7 @@ def channel_separable_convolution2D(im, vx, vy, border_type, value):
     im_res = make_border(im, ky, kx, border_type, value).astype(float)
 
     # Aplicamos la máscara por filas
-    for i in range(ky, nrows + ky):
+    for i in range(nrows + 2 * ky):
         im_res[i] = np.convolve(im_res[i], vx, 'same')
 
     # Aplicamos la máscara por columnas
