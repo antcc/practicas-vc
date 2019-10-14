@@ -13,7 +13,7 @@
 #
 
 from matplotlib import pyplot as plt
-from math import floor, exp
+from math import floor, exp, pi, sqrt
 import numpy as np
 import cv2
 
@@ -57,14 +57,13 @@ def read_im(filename, color_flag):
         print("Error: no se ha podido cargar la imagen " + filename)
         quit()
 
-    return im
+    return im.astype(np.double)
 
 def print_im(im, show = True):
     """Muestra una imagen cualquiera normalizada.
         - im: imagen a mostrar.
         - show: indica si queremos mostrar la imagen inmediatamente. Por defecto es True."""
 
-    im = im.astype(float)
     im = cv2.normalize(im, None, 0, 1, cv2.NORM_MINMAX)
 
     if is_grayscale(im):
@@ -119,10 +118,6 @@ def convolution2D(im, kernel, border_type = BORDER_REPLICATE, value = 0):
     vx = u[:,0]
     vy = v[:,0]
 
-    if len(vx) % 2 == 0 or len(vy) % 2 == 0:
-        print("Error: las máscaras 1D deben ser de longitud impar.")
-        return np.zeros(im.shape)
-
     return separable_convolution2D(im, vx, vy, border_type, value)
 
 def separable_convolution2D(im, vx, vy, border_type = BORDER_REPLICATE, value = 0):
@@ -130,6 +125,11 @@ def separable_convolution2D(im, vx, vy, border_type = BORDER_REPLICATE, value = 
         - im: imagen sobre la que convolucionar. No se modifica.
         - vx: máscara para las filas. Debe ser de tamaño impar.
         - vy: máscara para las columnas. Debe ser de tamaño impar."""
+
+    # Comprobamos que las máscaras tengan longitud impar
+    if len(vx) % 2 == 0 or len(vy) % 2 == 0:
+        print("Error: las máscaras 1D deben ser de longitud impar.")
+        return np.zeros(im.shape)
 
     # Aplicamos la convolución por canales
     if is_grayscale(im):
@@ -154,7 +154,7 @@ def channel_separable_convolution2D(im, vx, vy, border_type, value):
     # Píxeles "extra" en los bordes de cada dimensión
     kx = len(vx) // 2
     ky = len(vy) // 2
-    im_res = make_border(im, ky, kx, border_type, value).astype(float)
+    im_res = make_border(im, ky, kx, border_type, value)
 
     # Aplicamos la máscara por filas
     for i in range(nrows + 2 * ky):
@@ -203,17 +203,16 @@ def make_border(im, vert, horiz, border_type, value):
     return im_res
 
 #
-# EJERCICIO 1: filtros gaussiana, derivadas y laplaciana.
+# EJERCICIO 1: filtros Gaussiana, derivadas y Laplaciana.
 #
 
 def gaussian(x, sigma):
-    """Función gaussiana de media 0 y desviación típica sigma. No tiene el factor
-       1 / sqrt(2 * pi) * sigma porque luego se normalizará."""
+    """Función Gaussiana de media 0 y desviación típica sigma."""
 
-    return exp((-1 * x * x) / (2 * sigma * sigma))
+    return (1 / (sqrt(2 * pi) * sigma)) * exp((-1 * x * x) / (2 * sigma * sigma))
 
 def gaussian_blur2D(im, sigma, border_type = BORDER_REPLICATE, value = 0):
-    """Devuelve el resultado de convolucionar una máscara gaussiana 2D con una imagen,
+    """Devuelve el resultado de convolucionar una máscara Gaussiana 2D con una imagen,
        implementada mediante convolución con dos máscaras 1D.
         - im: imagen original. No se modifica.
         - sigma: desviación típica en la dirección horizontal y vertical.
@@ -221,7 +220,7 @@ def gaussian_blur2D(im, sigma, border_type = BORDER_REPLICATE, value = 0):
        2 * ⌊3 * sigma⌋ + 1."""
 
     # El intervalo para el muestreo (de enteros) será [-3 * sigma, 3 * sigma]
-    l = 3 * floor(sigma)
+    l = floor(3 * sigma)
 
     # Calculamos el kernel 1D y normalizamos
     gauss_ker = [gaussian(x, sigma) for x in range(-l, l + 1)]
@@ -249,8 +248,8 @@ def derivatives2D(im, dx, dy, size, border_type = BORDER_REPLICATE, value = 0):
 def laplacian2D(im, sigma, size, border_type = BORDER_REPLICATE, value = 0):
     """Aplica un filtro Laplaciana-de-Gaussiana a una imagen.
         - im: imagen sobre la que aplicar el filtro. No se modifica.
-        - sigma: desviación típica para el alisado gaussiano.
-        - size: tamaño del kernel laplaciano. Debe ser impar."""
+        - sigma: desviación típica para el alisado Gaussiano.
+        - size: tamaño del kernel Laplaciano. Debe ser impar."""
 
     im_smooth = gaussian_blur2D(im, sigma, border_type, value)
     vxx, v = get_derivatives2D(2, 0, size)
@@ -298,16 +297,16 @@ def ex1A():
 def ex1B():
     """Ejemplo de ejecución del ejercicio 1, apartado B."""
 
-    im = read_im(IM1, 0)
+    im = read_im(IM1, 1)
     sigma = [1, 3]
-    size = 3
+    size = 7
     border = [BORDER_CONSTANT, BORDER_REPLICATE]
     laplacian_im = [im]
     titles = ["Original",
-              "Laplaciana-de-Gaussiana 3x3, σ = " + str(sigma[0]) + ", borde constante",
-              "Laplaciana-de-Gaussiana 3x3, σ = " + str(sigma[0]) + ", borde replicado",
-              "Laplaciana-de-Gaussiana 3x3, σ = " + str(sigma[1]) + ", borde constante",
-              "Laplaciana-de-Gaussiana 3x3, σ = " + str(sigma[1]) + ", borde replicado"]
+              "Laplaciana-de-Gaussiana 7x7, σ = " + str(sigma[0]) + ", borde constante",
+              "Laplaciana-de-Gaussiana 7x7, σ = " + str(sigma[0]) + ", borde replicado",
+              "Laplaciana-de-Gaussiana 7x7, σ = " + str(sigma[1]) + ", borde constante",
+              "Laplaciana-de-Gaussiana 7x7, σ = " + str(sigma[1]) + ", borde replicado", "test"]
 
     for s in sigma:
         for b in border:
@@ -316,20 +315,71 @@ def ex1B():
     print_multiple_im(laplacian_im, titles)
 
 #
+# EJERCICIO 2
+#
+
+def gaussian_pyramid(im, sigma, size, border_type = BORDER_REPLICATE, value = 0):
+    """Devuelve una lista de imágenes que representan una pirámide Gaussiana.
+        - im: imagen original. No se modifica.
+        - sigma: desviación típica para el alisado Gaussiano.
+        - size: tamaño de la pirámide."""
+
+    pyramid = [im]
+    for k in range(size):
+        im_blur = gaussian_blur2D(pyramid[k], sigma, border_type, value)
+        im_blur = cv2.resize(im_blur, (im_blur.shape[1] // 2, im_blur.shape[0] // 2))
+        pyramid.append(im_blur)
+
+        if im_blur.shape[0] == 1 or im_blur.shape[1] == 1:
+            break
+
+    return pyramid
+
+def format_pyramid(vim):
+    """Construye una única imagen en forma de pirámide a partir de imágenes, cada una
+       con tamaño la mitad que la anterior."""
+
+    nrows, ncols = vim[0].shape[:2]
+
+    if is_grayscale(vim[0]):
+        pyramid = np.zeros((nrows, ncols + ncols // 2), dtype = np.double)
+    else:
+        pyramid = np.zeros((nrows, ncols + ncols // 2, 3), dtype = np.double)
+
+    pyramid[:nrows, :ncols] = vim[0]
+
+    i_row = 0
+    for p in vim[1:]:
+        p_nrows, p_ncols = p.shape[:2]
+        pyramid[i_row:i_row + p_nrows, ncols:ncols + p_ncols] = p
+        i_row += p_nrows
+
+    return pyramid
+
+def ex2A():
+    """Ejemplo de ejecución del ejercicio 2, apartado A."""
+
+    im = read_im(IM1, 1)
+    print_im(format_pyramid(gaussian_pyramid(im, 3, 4)))
+
+#
 # FUNCIÓN PRINCIPAL
 #
 
 def main():
-    """Ejecuta la práctica 1 paso a paso."""
+    """Ejecuta la práctica 1 paso a paso. Cada apartado es una llamada a una función."""
 
     """print("--- EJERCICIO 1 ---")
     print("-- Apartado A")
     ex1A()
-    wait()"""
+    wait()
     print("-- Apartado B")
     ex1B()
-    wait()
+    wait()"""
     print("\n--- EJERCICIO 2 ---")
+    print("-- Apartado A")
+    ex2A()
+    wait()
 
 if __name__ == "__main__":
   main()
