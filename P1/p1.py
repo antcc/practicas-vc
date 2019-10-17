@@ -13,7 +13,7 @@
 #
 
 from matplotlib import pyplot as plt
-from math import floor, exp, pi, sqrt
+from math import floor, exp, sqrt, log
 import numpy as np
 import cv2
 
@@ -22,12 +22,12 @@ import cv2
 #
 
 IM_PATH = "../img/"            # Carpeta de imágenes # TODO CAMBIAR POR "imagenes/"
-IM1 = IM_PATH + "cat.jpg"      # Imagen de ejemplo
+IM1 = IM_PATH + "lena.jpg"     # Imagen de ejemplo
 EPSILON = 1e-12                # Tolerancia para descomposición SVD
 BORDER_CONSTANT = 0            # Tratamiento de bordes #1 en la convolución
 BORDER_REPLICATE = 1           # Tratamiento de bordes #2 en la convolución
-WIDTH, HEIGHT = 7, 7           # Tamaño del multiplot
-NCOLS_PLOT = 3                 # Número de columnas en el multiplot
+WIDTH, HEIGHT = 7, 7           # Tamaño por defecto del plot
+NCOLS_PLOT = 3                 # Número de columnas por defecto en el multiplot
 
 #
 # FUNCIONES AUXILIARES
@@ -64,38 +64,41 @@ def read_im(filename, color_flag):
 
     return im.astype(np.double)
 
-def print_im(im, title = "", show = True):
+def print_im(im, title = "", show = True, tam = (WIDTH, HEIGHT)):
     """Muestra una imagen cualquiera normalizada.
         - im: imagen a mostrar.
-        - show: indica si queremos mostrar la imagen inmediatamente. Por defecto es True."""
+        - show: indica si queremos mostrar la imagen inmediatamente.
+        - tam = (width, height): tamaño del plot."""
 
     show_title = len(title) > 0
+
+    if show:
+        fig = plt.figure(figsize = tam)
+
     im = normalize(im)
-
-    if is_grayscale(im):
-        plt.imshow(im, cmap = 'gray')
-    else:
-        plt.imshow(im)
-
+    plt.imshow(im, interpolation = None, cmap = 'gray')
     plt.xticks([]), plt.yticks([])
+
     if show:
         if show_title:
             plt.title(title)
         plt.show(block = False)
         wait()
 
-def print_multiple_im(vim, titles = ""):
+def print_multiple_im(vim, titles = "", ncols = NCOLS_PLOT, tam = (WIDTH, HEIGHT)):
     """Muestra una sucesión de imágenes en la misma ventana, eventualmente con sus títulos.
         - vim: sucesión de imágenes a mostrar.
-        - titles: o bien vacío o bien una sucesión de títulos del mismo tamaño que vim."""
+        - titles: o bien vacío o bien una sucesión de títulos del mismo tamaño que vim.
+        - ncols: número de columnas del multiplot.
+        - tam = (width, height): tamaño del multiplot."""
 
     show_title = len(titles) > 0
 
-    nrows = len(vim) // NCOLS_PLOT + (0 if len(vim) % NCOLS_PLOT == 0 else 1)
-    plt.figure(figsize = (WIDTH, HEIGHT))
+    nrows = len(vim) // ncols + (0 if len(vim) % ncols == 0 else 1)
+    plt.figure(figsize = tam)
 
     for i in range(len(vim)):
-        plt.subplot(nrows, NCOLS_PLOT, i + 1)
+        plt.subplot(nrows, ncols, i + 1)
         if show_title:
             plt.title(titles[i])
         print_im(vim[i], title = "", show = False)
@@ -231,9 +234,19 @@ def convolve(a, v, kx):
 
 def gaussian(x, sigma):
     """Evaluación en el punto 'x' de la función Gaussiana de media 0 y desviación típica
-       'sigma'."""
+       'sigma', sin la constante de normalización."""
 
-    return (1.0 / (sqrt(2.0 * pi) * sigma)) * exp((- x * x) / (2.0 * sigma * sigma))
+    return exp((- x * x) / (2.0 * sigma * sigma))
+
+def gaussian_kernel1D(sigma):
+    """Devuelve una máscara Gaussiana 1D normalizada, con desviación típica 'sigma'."""
+
+    # El intervalo para el muestreo (de enteros) será [-3 * sigma, 3 * sigma]
+    l = floor(3 * sigma)
+
+    # Calculamos el kernel 1D y normalizamos
+    gauss_ker = [gaussian(x, sigma) for x in range(-l, l + 1)]
+    return gauss_ker / np.sum(gauss_ker)
 
 def gaussian_blur2D(im, sigma, border_type = BORDER_REPLICATE, value = 0.0):
     """Devuelve el resultado de convolucionar una máscara Gaussiana 2D con una imagen,
@@ -243,13 +256,10 @@ def gaussian_blur2D(im, sigma, border_type = BORDER_REPLICATE, value = 0.0):
        El tamaño de cada máscara 1D se calcula a partir de la desviación típica:
        2 * ⌊3 * sigma⌋ + 1."""
 
-    # El intervalo para el muestreo (de enteros) será [-3 * sigma, 3 * sigma]
-    l = floor(3 * sigma)
+    if sigma < 1.0 / 3.0:
+        return im
 
-    # Calculamos el kernel 1D y normalizamos
-    gauss_ker = [gaussian(x, sigma) for x in range(-l, l + 1)]
-    gauss_ker = gauss_ker / np.sum(gauss_ker)
-
+    gauss_ker = gaussian_kernel1D(sigma)
     return separable_convolution2D(im, gauss_ker, gauss_ker, border_type, value)
 
 def get_derivatives2D(dx, dy, size):
@@ -281,7 +291,7 @@ def laplacian2D(im, sigma, size, border_type = BORDER_REPLICATE, value = 0.0):
 
     im1 = separable_convolution2D(im_smooth, vxx, v, border_type, value)
     im2 = separable_convolution2D(im_smooth, u, vyy, border_type, value)
-    laplacian = sigma * sigma * (im1 + im2)
+    laplacian = im1 + im2
 
     return abs(laplacian)
 
@@ -437,8 +447,8 @@ def ex2A():
     gauss_pyramid1 = format_pyramid(gaussian_pyramid(im, 3, 4, border_type = BORDER_CONSTANT), 2)
     gauss_pyramid2 = format_pyramid(gaussian_pyramid(im, 5, 4), 2)
 
-    print_im(gauss_pyramid1, "Pirámide gaussiana, σ = 3, borde constante")
-    print_im(gauss_pyramid2, "Pirámide gaussiana, σ = 5, borde replicado")
+    print_im(gauss_pyramid1, "Pirámide Gaussiana, σ = 3, borde constante")
+    print_im(gauss_pyramid2, "Pirámide Gaussiana, σ = 5, borde replicado")
 
 def ex2B():
     """Ejemplo de ejecución del ejercicio 2, apartado B."""
@@ -451,14 +461,70 @@ def ex2B():
     rec_im = reconstruct_im(laplacian_pyramid1, sigma)
 
     print_im(format_pyramid(laplacian_pyramid1, scale),
-             title = "Pirámide laplaciana, σ = " + str(sigma) +
+             title = "Pirámide Laplaciana, σ = " + str(sigma) +
                      ", factor de escala = " + str(scale) + ", borde replicado")
 
     print_multiple_im([im, rec_im, abs(im - rec_im)],
                       ["Original", "Reconstruida a partir de la pirámide", "Diferencia"])
 
+def blob_detection():
+    pass
+
 def ex2C():
     pass
+
+#
+# EJERCICIO 3: imágenes híbridas
+#
+
+def hybrid_im(im1, im2, sigma1, sigma2, border_type = BORDER_REPLICATE, value = 0.0):
+    """Construye una imagen híbrida a partir de las bajas y altas frecuencias
+       de dos imágenes del mismo tamaño.
+        - im1: imagen de la que se extraen las bajas frecuencias.
+        - im2: imagen de la que se extraen las altas frecuencias.
+        - sigma1: desviación típica para el filtro paso baja.
+        - sigma2: desviación típica para el filtro paso alta.
+       Devuelve: bajas frecuencias im1, altas frecuencias im2, imagen híbrida."""
+
+    low_filter = gaussian_kernel1D(sigma1)
+
+    im1_low = separable_convolution2D(im1, low_filter, low_filter, border_type, value)
+    im2_high = im2 - separable_convolution2D(im2,low_filter, low_filter, border_type, value)
+
+    return [im1_low, abs(im2_high), abs(im1_low + im2_high)]
+
+def ex3(file1, file2, sigma1, sigma2, color_flag = 0):
+    """Ejemplo de ejecución del ejercicio 3.
+        - file1: archivo de la primera imagen (frecuencias bajas).
+        - file2: archivo de la segunda imagen (frecuencias altas).
+        - sigma1: desviación típica para filtro paso baja.
+        - sigma2: desviación típica para filtro paso alta.
+        - color_flag: indica si las imágenes se leen en color (1) o en grises (0)."""
+
+    # Leemos las imágenes
+    im1 = read_im(IM_PATH + file1 + ".bmp", color_flag)
+    im2 = read_im(IM_PATH + file2 + ".bmp", color_flag)
+
+    # Datos sobre frecuencias de corte
+    CUTOFF = sqrt(2 * log(2))
+    cutoff1 = CUTOFF * sigma1
+    cutoff2 = CUTOFF * sigma2
+    print("\nFrecuencia de corte del filtro paso baja: " + str(cutoff1))
+    print("Frecuencia de corte del filtro paso alta: " + str(cutoff2))
+
+    low_freq, high_freq, hybrid = hybrid_im(im1, im2, sigma1, sigma2)
+    scaled_hybrid = gaussian_pyramid(hybrid, 0, 4)
+    pyramid = gaussian_pyramid(hybrid, 1.8, 4)
+    scaled_pyramid = [cv2.resize(im, (im1.shape[1], im1.shape[0])) for im in pyramid[:-1]]
+
+    print_multiple_im([low_freq, high_freq, hybrid],
+                      ["Bajas frecuencias " + file1, "Altas frecuencias " + file2,
+                       "Imagen híbrida " + file1 + " - " + file2])
+    print_im(format_pyramid(scaled_hybrid, 2),
+             "Imagen híbrida " + file1 + " - " + file2 + " en varios tamaños")
+    print_multiple_im(scaled_pyramid,
+                      ["Nivel " + str(i) + " pirámide Gaussiana" for i in range(len(scaled_pyramid))])
+
 #
 # FUNCIÓN PRINCIPAL
 #
@@ -466,18 +532,41 @@ def ex2C():
 def main():
     """Ejecuta la práctica 1 paso a paso. Cada apartado es una llamada a una función."""
 
+    # Ejercicio 1
     """print("--- EJERCICIO 1 ---")
     print("-- Apartado A")
     ex1A()
+
     print("-- Apartado B")
     ex1B()
+
+    # Ejercicio 2
     print("\n--- EJERCICIO 2 ---")
     print("-- Apartado A")
     ex2A()
+
     print("-- Apartado B")
     ex2B()"""
+
     print("-- Apartado C")
     ex2C()
+
+    # Ejercicio 3
+    """print("\n--- EJERCICIO 3 ---")
+    print("-- Primera pareja")
+    im_low, im_high = "dog", "cat"
+    sigma1, sigma2 = 5.0, 7.0
+    ex3(im_low, im_high, sigma1, sigma2)
+
+    print("-- Segunda pareja")
+    im_low, im_high = "marilyn", "einstein"
+    sigma1, sigma2 = 3.0, 8.0
+    ex3(im_low, im_high, sigma1, sigma2)
+
+    print("-- Tercera pareja")
+    im_low, im_high = "submarine", "fish"
+    sigma1, sigma2 = 3.0, 7.0
+    ex3(im_low, im_high, sigma1, sigma2)"""
 
 if __name__ == "__main__":
   main()
