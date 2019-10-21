@@ -22,10 +22,11 @@ import cv2
 #
 
 IM_PATH = "../img/"            # Carpeta de imágenes # TODO CAMBIAR POR "imagenes/"
-IM1 = IM_PATH + "lena.jpg"     # Imagen de ejemplo
+IM1 = IM_PATH + "cat.bmp"      # Imagen de ejemplo
 EPSILON = 1e-12                # Tolerancia para descomposición SVD
 BORDER_CONSTANT = 0            # Tratamiento de bordes #1 en la convolución
 BORDER_REPLICATE = 1           # Tratamiento de bordes #2 en la convolución
+THRESHOLD = 0.01               # Umbral para máximos en el espacio de escalas
 WIDTH, HEIGHT = 7, 7           # Tamaño por defecto del plot
 NCOLS_PLOT = 3                 # Número de columnas por defecto en el multiplot
 
@@ -350,6 +351,17 @@ def ex1B():
 # EJERCICIO 2: pirámides Gaussiana, Laplaciana y búsqueda de regiones
 #
 
+def blur_and_downsample(im, sigma, border_type = BORDER_REPLICATE, value = 0.0):
+    """Aplica alisamiento Gaussiano con desviación típica 'sigma' a la imagen 'im',
+       y después reduce su tamaño a la mitad."""
+
+    nrows, ncols = im.shape[:2]
+    im_blur = gaussian_blur2D(im, sigma, border_type, value)
+    im_downsampled = np.array([im_blur[i] for i in range(1, nrows, 2)])
+    im_downsampled = np.transpose([im_downsampled[:, j] for j in range(1, ncols, 2)])
+
+    return im_downsampled
+
 def gaussian_pyramid(im, sigma, size, border_type = BORDER_REPLICATE, value = 0.0):
     """Devuelve una lista de imágenes que representan una pirámide Gaussiana.
         - im: imagen original. No se modifica.
@@ -358,12 +370,10 @@ def gaussian_pyramid(im, sigma, size, border_type = BORDER_REPLICATE, value = 0.
 
     pyramid = [im]
     for k in range(size):
-        # Blur y downsample
-        im_blur = gaussian_blur2D(pyramid[k], sigma, border_type, value)
-        im_downsampled = cv2.resize(im_blur, (im_blur.shape[1] // 2, im_blur.shape[0] // 2))
-        pyramid.append(im_downsampled)
+        im_next = blur_and_downsample(pyramid[k], sigma, border_type, value)
+        pyramid.append(im_next)
 
-        if im_downsampled.shape[0] == 1 or im_downsampled.shape[1] == 1:
+        if im_next.shape[0] == 1 or im_next.shape[1] == 1:
             break
 
     return pyramid
@@ -380,7 +390,7 @@ def laplacian_pyramid(im, sigma, size, scale, border_type = BORDER_REPLICATE, va
     for k in range(size):
         # Blur y downsample
         im_blur = gaussian_blur2D(x, sigma, border_type, value)
-        im_downsampled = cv2.resize(im_blur, (int(im_blur.shape[1] / scale), int(im_blur.shape[0] / scale)))
+        im_downsampled = cv2.resize(im_blur, (int(im_blur.shape[1] / scale), int(im_blur.shape[0] / scale)), interpolation = cv2.INTER_NEAREST)
 
         # Upsample y blur
         im_upsampled = cv2.resize(im_downsampled, (x.shape[1], x.shape[0]), interpolation = cv2.INTER_LINEAR)
@@ -399,8 +409,8 @@ def laplacian_pyramid(im, sigma, size, scale, border_type = BORDER_REPLICATE, va
     return pyramid
 
 def format_pyramid(vim, k):
-    """Construye una única imagen en forma de pirámide a partir de varias imágenes, cada una
-       con tamaño 1 / 'k' veces el de la anterior."""
+    """Construye una única imagen en forma de pirámide a partir de varias imágenes,
+       cada una con tamaño 1 / 'k' veces el de la anterior."""
 
     nrows, ncols = vim[0].shape[:2]
 
@@ -467,11 +477,63 @@ def ex2B():
     print_multiple_im([im, rec_im, abs(im - rec_im)],
                       ["Original", "Reconstruida a partir de la pirámide", "Diferencia"])
 
-def blob_detection():
-    pass
+def blob_detection(im, n, sigma, size, step, border_type = BORDER_REPLICATE, value = 0.0):
+    """Realiza detección de regiones en un espacio de escalas a través de
+       la Laplaciana-de-Gaussiana, basándose en la técnica de supresión de no-máximos.
+        - im: imagen original. Debe estar en escala de grises.
+        - n: número de escalas.
+        - sigma: desviación típica para el alisado Gaussiano.
+        - size: tamaño del kernel Laplaciano.
+        - step: factor de incremento de la desviación típica en cada escala."""
+
+    nrows, ncols = im.shape[:2]
+    im_color = cv2.normalize(im.astype(np.uint8), None, 0, 255, cv2.NORM_MINMAX)
+    im_color = cv2.cvtColor(im_color, cv2.COLOR_GRAY2RGB)
+
+    scale_regions = []
+    s = sigma
+    for p in range(n):
+        im_scale = normalize(np.square(laplacian2D(im, s, size, border_type, value)))
+        index_lst = []
+
+        # Perform non-maximum supression on the current scale
+        for i in range(nrows):
+            for j in range(ncols):
+
+                # Select neighbours (counting oneself)
+                neighbours = []
+                for k in range(-1, 2):
+                    for l in range(-1, 2):
+                        if i + k >= 0 and i + k < nrows and j + l >= 0 and j + l < ncols:
+                            neighbours.append(im_scale[i + k][j + l])
+
+                # Non-maximum supression
+                if np.max(neighbours) <= im_scale[i, j] and im_scale[i, j] > THRESHOLD:
+                    index_lst.append((j, i))
+
+        # Draw circles on current scale
+        im_aux = im_color.copy()
+        for index in index_lst:
+            im_aux = cv2.circle(im_aux, index, int(sqrt(2) * s), (255, 0, 0))
+
+        scale_regions.append(im_aux.astype(np.double))
+        s = s * step
+
+    return scale_regions
 
 def ex2C():
-    pass
+    """Ejemplo de ejecución del ejercicio 2, apartado C."""
+
+    im = read_im(IM1, 0)
+    n = 6
+    sigma = 1.0
+    size = 5
+    k = 1.2
+    titles = ["Escala " + str(i) for i in range(1, n + 1)]
+
+    scale_regions = blob_detection(im, n, sigma, size, k)
+
+    print_multiple_im(scale_regions, titles)
 
 #
 # EJERCICIO 3: imágenes híbridas
@@ -512,18 +574,16 @@ def ex3(file1, file2, sigma1, sigma2, color_flag = 0):
     print("\nFrecuencia de corte del filtro paso baja: " + str(cutoff1))
     print("Frecuencia de corte del filtro paso alta: " + str(cutoff2))
 
+    # Creamos la imagen híbrida
     low_freq, high_freq, hybrid = hybrid_im(im1, im2, sigma1, sigma2)
-    scaled_hybrid = gaussian_pyramid(hybrid, 0, 4)
-    pyramid = gaussian_pyramid(hybrid, 1.8, 4)
-    scaled_pyramid = [cv2.resize(im, (im1.shape[1], im1.shape[0])) for im in pyramid[:-1]]
+    pyramid = gaussian_pyramid(hybrid, 2, 4)
 
+    # Imprimimos los resultados
     print_multiple_im([low_freq, high_freq, hybrid],
                       ["Bajas frecuencias " + file1, "Altas frecuencias " + file2,
                        "Imagen híbrida " + file1 + " - " + file2])
-    print_im(format_pyramid(scaled_hybrid, 2),
-             "Imagen híbrida " + file1 + " - " + file2 + " en varios tamaños")
-    print_multiple_im(scaled_pyramid,
-                      ["Nivel " + str(i) + " pirámide Gaussiana" for i in range(len(scaled_pyramid))])
+    print_im(format_pyramid(pyramid, 2),
+             "Pirámide Gaussiana de imagen híbrida " + file1 + " - " + file2)
 
 #
 # FUNCIÓN PRINCIPAL
@@ -560,7 +620,7 @@ def main():
 
     print("-- Segunda pareja")
     im_low, im_high = "marilyn", "einstein"
-    sigma1, sigma2 = 3.0, 8.0
+    sigma1, sigma2 = 3.0, 7.0
     ex3(im_low, im_high, sigma1, sigma2)
 
     print("-- Tercera pareja")
