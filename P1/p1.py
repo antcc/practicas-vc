@@ -21,9 +21,9 @@ import cv2
 # PARÁMETROS GLOBALES
 #
 
-IM_PATH = "../img/"            # Carpeta de imágenes # TODO CAMBIAR POR "imagenes/"
+IM_PATH = "imagenes/"          # Carpeta de imágenes
 IM1 = IM_PATH + "cat.bmp"      # Imagen de ejemplo
-EPSILON = 1e-12                # Tolerancia para descomposición SVD
+EPSILON = 1e-10                # Tolerancia para descomposición SVD
 BORDER_CONSTANT = 0            # Tratamiento de bordes #1 en la convolución
 BORDER_REPLICATE = 1           # Tratamiento de bordes #2 en la convolución
 THRESHOLD = 0.05               # Umbral para máximos en el espacio de escalas
@@ -122,7 +122,7 @@ def convolution2D(im, kernel, border_type = BORDER_REPLICATE, value = 0.0):
         - value: si border_type = BORDER_CONSTANT, indica el color del borde."""
 
     # Comprobamos si el kernel tiene rango 1 mediante descomposición SVD
-    u, s, v = np.linalg.svd(kernel)
+    u, s, vt = np.linalg.svd(kernel)
     rank = np.sum(s > EPSILON)
 
     if rank != 1:
@@ -130,8 +130,8 @@ def convolution2D(im, kernel, border_type = BORDER_REPLICATE, value = 0.0):
         return np.zeros(im.shape)
 
     # Obtenemos las máscaras separadas
-    vx = u[:,0]
-    vy = v[:,0]
+    vx = u[:,0] * sqrt(s[0])
+    vy = vt[0] * sqrt(s[0])
 
     return separable_convolution2D(im, vx, vy, border_type, value)
 
@@ -241,8 +241,8 @@ def convolve(a, v, kx):
 #
 
 def gaussian(x, sigma):
-    """Evaluación en el punto 'x' de la función Gaussiana de media 0 y desviación típica
-       'sigma', sin la constante de normalización."""
+    """Evaluación en el punto 'x' de la función de densidad normal de media 0 y
+       desviación típica 'sigma', sin la constante de normalización."""
 
     return exp((- x * x) / (2.0 * sigma * sigma))
 
@@ -324,7 +324,8 @@ def ex1A():
                       ["Original",
                        "GaussianBlur σ = 1, borde constante",
                        "GaussianBlur σ = 3, borde replicado",
-                       "GaussianBlur σ = 7, borde replicado"])
+                       "GaussianBlur σ = 7, borde replicado"],
+                      ncols = 2)
 
     print("Derivadas")
     print_multiple_im([im_gray, im4, im5],
@@ -404,11 +405,11 @@ def laplacian_pyramid(im, sigma, size, scale, border_type = BORDER_REPLICATE, va
     for k in range(size):
         # Blur y downsample
         im_blur = gaussian_blur2D(x, sigma, border_type, value)
-        im_downsampled = cv2.resize(im_blur, (int(im_blur.shape[1] / scale), int(im_blur.shape[0] / scale)), interpolation = cv2.INTER_NEAREST)
+        im_downsampled = cv2.resize(im_blur, (int(im_blur.shape[1] / scale), int(im_blur.shape[0] / scale)))
 
         # Upsample y blur
-        im_upsampled = cv2.resize(im_downsampled, (x.shape[1], x.shape[0]), interpolation = cv2.INTER_LINEAR)
-        im_upsampled = gaussian_blur2D(im_upsampled, sigma, border_type, value)
+        im_upsampled = gaussian_blur2D(im_downsampled, sigma, border_type, value)
+        im_upsampled = cv2.resize(im_upsampled, (x.shape[1], x.shape[0]), interpolation = cv2.INTER_LINEAR)
 
         # Añadimos a la pirámide
         pyramid.append(x - im_upsampled)
@@ -459,9 +460,9 @@ def reconstruct_im(pyramid, sigma, border_type = BORDER_REPLICATE, value = 0.0):
     im = pyramid[-1]
 
     for p in pyramid[-2::-1]:
-        # Upsample y blur
-        im = cv2.resize(im, (p.shape[1], p.shape[0]), interpolation = cv2.INTER_LINEAR)
-        im = p + gaussian_blur2D(im, sigma, border_type, value)
+        # Blur y upsample
+        im = gaussian_blur2D(im, sigma, border_type, value)
+        im = p + cv2.resize(im, (p.shape[1], p.shape[0]), interpolation = cv2.INTER_LINEAR)
 
     return im
 
@@ -602,7 +603,7 @@ def hybrid_im(im1, im2, sigma1, sigma2, border_type = BORDER_REPLICATE, value = 
     return [im1_low, abs(im2_high), abs(im1_low + im2_high)]
 
 def ex3(file1, file2, sigma1, sigma2, color_flag = 0):
-    """Ejemplo de ejecución del ejercicio 3.
+    """Ejemplo de ejecución del ejercicio 3. Construye imágenes híbridas en blanco y negro.
         - file1: archivo de la primera imagen (frecuencias bajas).
         - file2: archivo de la segunda imagen (frecuencias altas).
         - sigma1: desviación típica para filtro paso baja.
@@ -631,6 +632,31 @@ def ex3(file1, file2, sigma1, sigma2, color_flag = 0):
     print_im(format_pyramid(pyramid, 2),
              "Pirámide Gaussiana de imagen híbrida " + file1 + " - " + file2)
 
+
+#
+# BONUS 2: imágenes híbridas en color.
+#
+
+def bonus2(vim, vsigma):
+    """Ejemplo de ejecución del bonus 2. Construye imágenes híbridas a color.
+        - vim: lista de parejas para realizar imágenes híbridas.
+        - vsigma: lista de parejas de parámetros sigma1 y sigma2 para hibridar.
+          Debe tener la misma longitud que vim."""
+
+    for k, pair in enumerate(vim):
+        # Leemos las imágenes
+        im1 = read_im(IM_PATH + pair[0] + ".bmp", 1)
+        im2 = read_im(IM_PATH + pair[1] + ".bmp", 1)
+        sigma = vsigma[k]
+
+        # Realizamos la pirámide Gaussiana de la imagen híbrida
+        _, _, hybrid = hybrid_im(im1, im2, sigma[0], sigma[1])
+        pyramid = format_pyramid(gaussian_pyramid(hybrid, 2, 4), 2)
+
+        print("-- Pareja " + str(k + 1))
+        print_im(pyramid, "Pirámide Gaussiana de imagen híbrida "
+                         + pair[0] + " - " + pair[1])
+
 #
 # FUNCIÓN PRINCIPAL
 #
@@ -639,7 +665,7 @@ def main():
     """Ejecuta la práctica 1 paso a paso. Cada apartado es una llamada a una función."""
 
     # Ejercicio 1
-    """print("--- EJERCICIO 1 ---")
+    print("--- EJERCICIO 1 ---")
     print("-- Apartado A")
     ex1A()
 
@@ -656,7 +682,7 @@ def main():
 
     print("-- Apartado C")
     file2 = "bird.bmp"
-    ex2C(file2)"""
+    ex2C(file2)
 
     # Ejercicio 3
     print("\n--- EJERCICIO 3 ---")
@@ -674,6 +700,15 @@ def main():
     im_low, im_high = "submarine", "fish"
     sigma1, sigma2 = 3.0, 7.0
     ex3(im_low, im_high, sigma1, sigma2)
+
+    # Bonus 2
+    print("\n--- BONUS 2 ---")
+    print("Realizamos todas las parejas de imágenes híbridas en color.")
+    vim = [("dog", "cat"), ("marilyn", "einstein"),
+           ("submarine", "fish"), ("plane", "bird"),
+           ("motorcycle", "bicycle")]
+    vsigma = [(6, 7), (3, 7), (4, 7), (9, 7), (7, 9)]
+    bonus2(vim, vsigma)
 
 if __name__ == "__main__":
   main()
