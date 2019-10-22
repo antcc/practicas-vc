@@ -26,7 +26,8 @@ IM1 = IM_PATH + "cat.bmp"      # Imagen de ejemplo
 EPSILON = 1e-12                # Tolerancia para descomposición SVD
 BORDER_CONSTANT = 0            # Tratamiento de bordes #1 en la convolución
 BORDER_REPLICATE = 1           # Tratamiento de bordes #2 en la convolución
-THRESHOLD = 0.01               # Umbral para máximos en el espacio de escalas
+THRESHOLD = 0.05               # Umbral para máximos en el espacio de escalas
+NUM_MAX = 750                  # Número de máximos en el espacio de escalas
 WIDTH, HEIGHT = 7, 7           # Tamaño por defecto del plot
 NCOLS_PLOT = 3                 # Número de columnas por defecto en el multiplot
 
@@ -41,7 +42,7 @@ def wait():
     plt.close()
 
 def is_grayscale(im):
-    """Indica si una imagen está en escala de grises."""
+    """Indica si una imagen está en escala de grises (monobanda)."""
 
     return len(im.shape) == 2
 
@@ -51,7 +52,7 @@ def normalize(im):
     return cv2.normalize(im, None, 0.0, 1.0, cv2.NORM_MINMAX)
 
 def read_im(filename, color_flag):
-    """Devuelve una imagen adecuadamente leída en grises o en color.
+    """Devuelve una imagen de números reales adecuadamente leída en grises o en color.
         - filename: ruta de la imagen.
         - color_flag: indica si es en color (1) o en grises (0)."""
 
@@ -76,14 +77,14 @@ def print_im(im, title = "", show = True, tam = (WIDTH, HEIGHT)):
     if show:
         fig = plt.figure(figsize = tam)
 
-    im = normalize(im)
+    im = normalize(im)  # Normalizamos a [0,1]
     plt.imshow(im, interpolation = None, cmap = 'gray')
     plt.xticks([]), plt.yticks([])
 
     if show:
         if show_title:
             plt.title(title)
-        plt.show(block = False)
+        plt.show(block = False)  # No cerrar el plot
         wait()
 
 def print_multiple_im(vim, titles = "", ncols = NCOLS_PLOT, tam = (WIDTH, HEIGHT)):
@@ -149,8 +150,8 @@ def separable_convolution2D(im, vx, vy, border_type = BORDER_REPLICATE, value = 
     if is_grayscale(im):
         im_res = channel_separable_convolution2D(im, vx, vy, border_type, value)
     else:
-        channels = cv2.split(im)
-        im_res = cv2.merge(
+        channels = cv2.split(im)  # Separar en 3 canales
+        im_res = cv2.merge(       # Volver a juntar en una imagen tribanda
                  [channel_separable_convolution2D(ch, vx, vy, border_type, value)
                   for ch in channels])
 
@@ -192,10 +193,12 @@ def make_border(im, vert, horiz, border_type, value):
     if border_type == BORDER_CONSTANT:
         im_res = im.copy()
 
+        # Añadir filas constantes de borde
         pad_row = np.full((1, ncols), value, dtype = np.double)
         for i in range(vert):
             im_res = np.vstack([pad_row, im_res, pad_row])
 
+        # Añadir columnas constantes de borde
         pad_col = np.full((1, im_res.shape[0]), value, dtype = np.double)
         for j in range(horiz):
             im_res = np.transpose(np.vstack([pad_col, np.transpose(im_res), pad_col]))
@@ -203,11 +206,13 @@ def make_border(im, vert, horiz, border_type, value):
     else:
         im_res = np.zeros((nrows + 2 * vert, ncols + 2 * horiz), dtype = np.double)
 
+        # Añadir filas replicadas de borde
         for i in range(nrows):
             pad_row_1 = np.full(horiz, im[i][0])
             pad_row_2 = np.full(horiz, im[i][ncols - 1])
             im_res[i + vert] = np.hstack([pad_row_1, im[i], pad_row_2])
 
+        # Añadir columnas replicadas de borde
         for j in range(ncols):
             pad_col_1 = np.full(vert, im[:, j][0])
             pad_col_2 = np.full(vert, im[:, j][nrows - 1])
@@ -219,9 +224,11 @@ def convolve(a, v, kx):
     """Devuelve la convolución de dos vectores 1D 'a' y 'v', de longitud len(a), con 'kx'
        posiciones de borde a ambos extremos. Debe ser len(a) >= len(v)."""
 
+    # Añadir 0s extra a ambos lados del vector a
     pad = np.zeros(kx, dtype = np.double)
     b = np.hstack([pad, a, pad])
 
+    # Construir la matriz A para multiplicar por v
     rows = []
     for i in range(len(a)):
         rows.append(b[i:i + len(v)])
@@ -264,7 +271,7 @@ def gaussian_blur2D(im, sigma, border_type = BORDER_REPLICATE, value = 0.0):
     return separable_convolution2D(im, gauss_ker, gauss_ker, border_type, value)
 
 def get_derivatives2D(dx, dy, size):
-    """Calcula máscaras de derivadas.
+    """Calcula máscaras de derivadas normalizadas.
         - dx: orden de la derivada en X.
         - dy: orden de la derivada en Y.
         - size: tamaño de las máscaras. Debe ser impar."""
@@ -309,8 +316,7 @@ def ex1A():
 
     # Derivadas
     im4 = derivatives2D(im_gray, 1, 0, 3)
-    im5 = derivatives2D(im_gray, 0, 1, 3)
-    im6 = derivatives2D(im_gray, 0, 2, 3)
+    im5 = derivatives2D(im_gray, 0, 2, 3)
 
     # Imprimimos los resultados
     print("Gaussiana")
@@ -321,27 +327,28 @@ def ex1A():
                        "GaussianBlur σ = 7, borde replicado"])
 
     print("Derivadas")
-    print_multiple_im([im_gray, im4, im5, im6],
+    print_multiple_im([im_gray, im4, im5],
                       ["Original (grises)",
                        "Derivada resp. X 3x3, borde constante",
-                       "Derivada resp. Y 3x3, borde replicado",
                        "Derivada 2ª resp. Y 3x3, borde replicado"])
 
 def ex1B():
     """Ejemplo de ejecución del ejercicio 1, apartado B."""
 
-    im = read_im(IM1, 0)
+    im = read_im(IM1, 1)
     sigma = [1, 3]
     size = 7
     border = [BORDER_CONSTANT, BORDER_REPLICATE]
-    laplacian_im = [im]
+    laplacian_im = []
     titles = ["Original",
               "Laplaciana-de-Gaussiana 7x7, σ = " + str(sigma[0]) + ", borde constante",
               "Laplaciana-de-Gaussiana 7x7, σ = " + str(sigma[0]) + ", borde replicado",
+              "Original",
               "Laplaciana-de-Gaussiana 7x7, σ = " + str(sigma[1]) + ", borde constante",
               "Laplaciana-de-Gaussiana 7x7, σ = " + str(sigma[1]) + ", borde replicado"]
 
     for s in sigma:
+        laplacian_im.append(im)
         for b in border:
             laplacian_im.append(laplacian2D(im, s, size, b))
 
@@ -356,9 +363,16 @@ def blur_and_downsample(im, sigma, border_type = BORDER_REPLICATE, value = 0.0):
        y después reduce su tamaño a la mitad."""
 
     nrows, ncols = im.shape[:2]
+
+    # Alisamiento Gaussiano
     im_blur = gaussian_blur2D(im, sigma, border_type, value)
+
+    # Eliminar filas impares
     im_downsampled = np.array([im_blur[i] for i in range(1, nrows, 2)])
-    im_downsampled = np.transpose([im_downsampled[:, j] for j in range(1, ncols, 2)])
+
+    # Eliminar columnas impares
+    axes = (1, 0) if is_grayscale(im) else (1, 0 ,2)
+    im_downsampled = np.transpose([im_downsampled[:, j] for j in range(1, ncols, 2)], axes)
 
     return im_downsampled
 
@@ -413,18 +427,20 @@ def format_pyramid(vim, k):
        cada una con tamaño 1 / 'k' veces el de la anterior."""
 
     nrows, ncols = vim[0].shape[:2]
-
     diff = np.sum([im.shape[0] for im in vim[1:]]) - nrows
     extra_rows = diff if diff > 0 else 0
     extra_cols = int(ncols / k)
 
+    # Creamos la imagen que hará de marco
     if is_grayscale(vim[0]):
         pyramid = np.zeros((nrows + extra_rows, ncols + extra_cols), dtype = np.double)
     else:
         pyramid = np.zeros((nrows + extra_rows, ncols + extra_cols, 3), dtype = np.double)
 
+    # Colocamos la primera imagen
     pyramid[:nrows, :ncols] = vim[0]
 
+    # Añadimos las siguientes imágenes en su lugar correspondiente
     i_row = 0
     for p in vim[1:]:
         p_nrows, p_ncols = p.shape[:2]
@@ -487,53 +503,82 @@ def blob_detection(im, n, sigma, size, step, border_type = BORDER_REPLICATE, val
         - step: factor de incremento de la desviación típica en cada escala."""
 
     nrows, ncols = im.shape[:2]
+
+    # Pasamos la imagen a color para dibujar círculos de colores sobre ella
     im_color = cv2.normalize(im.astype(np.uint8), None, 0, 255, cv2.NORM_MINMAX)
     im_color = cv2.cvtColor(im_color, cv2.COLOR_GRAY2RGB)
 
-    scale_regions = []
-    s = sigma
-    for p in range(n):
-        im_scale = normalize(np.square(laplacian2D(im, s, size, border_type, value)))
-        index_lst = []
+    # Construimos el espacio de escalas
+    scale_sigma = [sigma * step ** i for i in range(n)]
+    scale_regions = [normalize(np.square(laplacian2D(im, s, size, border_type, value))) for s in scale_sigma]
 
-        # Perform non-maximum supression on the current scale
+    index_lst = []
+    for p in range(n):
+        index_lst.append([])
+        im_scale = scale_regions[p]
+
+        # Supresión de no máximos en la escala actual
         for i in range(nrows):
             for j in range(ncols):
 
-                # Select neighbours (counting oneself)
+                # Seleccionamos vecinos en un cubo de lado 3 (contando a uno mismo)
                 neighbours = []
                 for k in range(-1, 2):
                     for l in range(-1, 2):
                         if i + k >= 0 and i + k < nrows and j + l >= 0 and j + l < ncols:
-                            neighbours.append(im_scale[i + k][j + l])
+                            neighbours.append(im_scale[i + k, j + l])  # Nivel actual
+                            if p > 0:  # Nivel inferior
+                                neighbours.append(scale_regions[p - 1][i + k, j + l])
+                            if p < n - 1:  # Nivel superior
+                                neighbours.append(scale_regions[p + 1][i + k, j + l])
 
-                # Non-maximum supression
-                if np.max(neighbours) <= im_scale[i, j] and im_scale[i, j] > THRESHOLD:
-                    index_lst.append((j, i))
+                # Seleccionamos los máximos que superen un umbral
+                if im_scale[i, j] > THRESHOLD and np.max(neighbours) <= im_scale[i, j]:
+                    index_lst[p].append((i, j))
 
-        # Draw circles on current scale
-        im_aux = im_color.copy()
-        for index in index_lst:
-            im_aux = cv2.circle(im_aux, index, int(sqrt(2) * s), (255, 0, 0))
+        # Dibujamos círculos en la imagen original
+        blob = im_color.copy()
+        for p, lst in enumerate(index_lst):
+            lst = sorted(lst, key = lambda x: scale_regions[p][x], reverse = True)
 
-        scale_regions.append(im_aux.astype(np.double))
-        s = s * step
+            # Pintamos como mucho NUM_MAX círculos (los más altos de cada escala)
+            for index in lst[:NUM_MAX]:
 
-    return scale_regions
+                # Elegimos un color para cada escala (módulo 6) y un radio
+                if p % 6 == 0:
+                    color = (255, 0, 0)
+                elif p % 6 == 1:
+                    color = (0, 255, 0)
+                elif p % 6 == 2:
+                    color = (0, 0, 255)
+                elif p % 6 == 3:
+                    color = (255, 0, 255)
+                elif p % 6 == 4:
+                    color = (0, 255, 255)
+                else:
+                    color = (255, 255, 0)
 
-def ex2C():
+                radius = int(2 * scale_sigma[p])
+
+                # Pintamos un círculo por cada máximo encontrado
+                blob = cv2.circle(blob, index[::-1], radius, color)
+
+    return blob.astype(np.double)
+
+def ex2C(file2):
     """Ejemplo de ejecución del ejercicio 2, apartado C."""
 
-    im = read_im(IM1, 0)
-    n = 6
+    im1 = read_im(IM1, 0)
+    im2 = read_im(IM_PATH + file2, 0)
+    n = [3, 5]
     sigma = 1.0
     size = 5
     k = 1.2
-    titles = ["Escala " + str(i) for i in range(1, n + 1)]
 
-    scale_regions = blob_detection(im, n, sigma, size, k)
+    blob = blob_detection(im1, n[0], sigma, size, k)
+    blob2 = blob_detection(im2, n[1], sigma, size, k)
 
-    print_multiple_im(scale_regions, titles)
+    print_multiple_im([blob, blob2], ["Regiones detectadas en " + str(n[0]) + " escalas", "Regiones detectadas en " + str(n[1]) + " escalas"], ncols = 2)
 
 #
 # EJERCICIO 3: imágenes híbridas
@@ -550,6 +595,7 @@ def hybrid_im(im1, im2, sigma1, sigma2, border_type = BORDER_REPLICATE, value = 
 
     low_filter = gaussian_kernel1D(sigma1)
 
+    # Extraemos frecuencias bajas de im1 y frecuencias altas de im2
     im1_low = separable_convolution2D(im1, low_filter, low_filter, border_type, value)
     im2_high = im2 - separable_convolution2D(im2,low_filter, low_filter, border_type, value)
 
@@ -606,13 +652,14 @@ def main():
     ex2A()
 
     print("-- Apartado B")
-    ex2B()"""
+    ex2B()
 
     print("-- Apartado C")
-    ex2C()
+    file2 = "bird.bmp"
+    ex2C(file2)"""
 
     # Ejercicio 3
-    """print("\n--- EJERCICIO 3 ---")
+    print("\n--- EJERCICIO 3 ---")
     print("-- Primera pareja")
     im_low, im_high = "dog", "cat"
     sigma1, sigma2 = 5.0, 7.0
@@ -626,7 +673,7 @@ def main():
     print("-- Tercera pareja")
     im_low, im_high = "submarine", "fish"
     sigma1, sigma2 = 3.0, 7.0
-    ex3(im_low, im_high, sigma1, sigma2)"""
+    ex3(im_low, im_high, sigma1, sigma2)
 
 if __name__ == "__main__":
   main()
