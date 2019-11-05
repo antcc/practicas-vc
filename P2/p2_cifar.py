@@ -13,6 +13,7 @@
 #
 
 # Generales
+import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -22,8 +23,9 @@ import keras.utils as np_utils
 
 # Modelos y capas
 from keras.models import Sequential
-from keras.layers import Dense, Flatten
-from keras.layers import Conv2D, MaxPooling2D
+from keras.layers import Dense, Conv2D
+from keras.layers import Flatten, MaxPooling2D, Activation
+from keras.layers import BatchNormalization
 
 # Optimizador
 from keras.optimizers import SGD
@@ -38,9 +40,10 @@ from keras.datasets import cifar100
 # PARÁMETROS GLOBALES
 #
 
-N = 25           # Número de clases
-EPOCHS = 25      # Épocas de entrenamiento
-BATCH_SIZE = 32  # Tamaño de cada batch de imágenes
+N = 25                     # Número de clases
+EPOCHS = 25                # Épocas de entrenamiento
+BATCH_SIZE = 32            # Tamaño de cada batch de imágenes
+INPUT_SHAPE = (32, 32, 3)  # Formato de entrada de imágenes
 
 #
 # FUNCIONES AUXILIARES
@@ -83,7 +86,7 @@ def load_data():
 
     # Convertimos los vectores de clases en matrices binarias
     y_train = np_utils.to_categorical(y_train, N)
-    y_test = np_utils.to_categorical(y_test, 25)
+    y_test = np_utils.to_categorical(y_test, N)
 
     return x_train, y_train, x_test, y_test
 
@@ -109,15 +112,14 @@ def accuracy(labels, preds):
 #
 
 def show_evolution(hist):
-    """Pinta dos gráficas, una con la evolución de la función de pérdida en el
-       conjunto de entrenamiento y en el de validación, y otra con la evolución
+    """Pinta dos gráficas: una con la evolución de la función de pérdida
+       en el conjunto de entrenamiento y en el de validación, y otra con la evolución
        del accuracy en el conjunto de entrenamiento y en el de validación.
         - hist: historial de entrenamiento del modelo."""
 
-    # Evolución de la función de pérdida
+    # Evolución de las funciones de pérdida
     loss = hist.history['loss']
     val_loss = hist.history['val_loss']
-
     plt.plot(loss)
     plt.plot(val_loss)
     plt.legend(["Training loss", "Validation loss"])
@@ -135,6 +137,31 @@ def show_evolution(hist):
 
     wait()
 
+def show_evolution_val(*hist):
+    """Pinta dos gráficas: una con la evolución de la función de pérdida en el conjunto
+       de validación para todos los modelos, y otra con la evolución del accuracy
+       en el conjunto de validación para todos los modelos.
+        - *hist: lista de historiales de entrenamientos de los modelos."""
+
+    # Evolución de las funciones de pérdida
+    for h in hist:
+        val_loss = h.history['val_loss']
+        plt.plot(val_loss)
+
+    plt.legend(["Validation loss " + str(i + 1) for i in range(len(hist))])
+    plt.show()
+    wait()
+
+    # Evolución del accuracy
+    for h in hist:
+        val_acc = h.history['val_accuracy']
+        plt.plot(val_acc)
+
+    plt.legend(["Validation accuracy " + str(i + 1) for i in range(len(hist))])
+
+    plt.show()
+    wait()
+
 def show_stats(score, hist):
     """Muestra estadísticas de accuracy y loss y gráficas de evolución."""
 
@@ -143,27 +170,6 @@ def show_stats(score, hist):
     print("Test accuracy: ", score[1])
     print()
     show_evolution(hist)
-
-#
-# DESCRIPCIÓN DE LOS MODELOS
-#
-
-def basenet_model():
-    """Devuelve el modelo de referencia BaseNet."""
-
-    model = Sequential()
-    model.add(Conv2D(6, kernel_size = (5, 5),
-                     activation = 'relu',
-                     input_shape = (32, 32, 3)))
-    model.add(MaxPooling2D(pool_size = (2, 2)))
-    model.add(Conv2D(16, kernel_size = (5, 5),
-                     activation='relu'))
-    model.add(MaxPooling2D(pool_size = (2, 2)))
-    model.add(Flatten())
-    model.add(Dense(50, activation = 'relu'))
-    model.add(Dense(N, activation = 'softmax'))
-
-    return model
 
 #
 # COMPILACIÓN DEL MODELO
@@ -183,15 +189,19 @@ def compile(model):
 # ENTRENAMIENTO DEL MODELO
 #
 
-def train(model, x_train, y_train, x_test, y_test):
+def train(model, x_train, y_train, x_test, y_test, save_hist = False):
     """Entrenar el modelo con los datos de entrenamiento. Se guarda el estado
-       por el que se ha quedado entrenando. Devuelve el historial de entrenamiento."""
+       por el que se ha quedado entrenando. Devuelve el historial de entrenamiento.
+        - save_hist: controla si se guarda en fichero el historial de entrenamiento."""
 
     hist = model.fit(x_train, y_train,
                      batch_size = BATCH_SIZE,
                      epochs = EPOCHS,
                      verbose = 1,
                      validation_data = (x_test, y_test))
+    if save_hist:
+        with open("basenet_hist_" + str(EPOCHS), 'wb') as f:
+            pickle.dump(hist, f)
 
     return hist
 
@@ -214,34 +224,129 @@ def evaluate(model, x_test, y_test):
     return score
 
 #
-# APARTADO 1: BASENET
+# EJECUCIÓN COMPLETA DEL MODELO
 #
 
-def ex1():
-    """Ejercicio 1 de la práctica 2. Entrenamiento y evaluación sobre
-       CIFAR100 con la red BaseNet."""
+def execute(model_gen, filename = "", load_w = False, save_w = False):
+    """Construir, compilar, entrenar y evaluar un modelo. Devuelve el
+       historial de entrenamiento y la evaluación del modelo.
+        - model_gen: función que devuelve el modelo en cuestión.
+        - filename: nombre del fichero HDF5 para cargar/guardar pesos.
+        - load_w: controla si se cargan los pesos iniciales de un fichero.
+        - save_w: controla si se guardan los pesos aprendidos en un fichero."""
 
     # Construimos y compilamos el modelo
-    basenet = basenet_model()
-    compile(basenet)
+    model = model_gen()
+    compile(model)
 
-    # Guardamos los pesos iniciales antes de entrenar
-    ini_weights = basenet.get_weights()
+    # Cargamos pesos precalculados
+    if load_w:
+        model.load_weights(filename)
 
     # Cargamos los datos y entrenamos el modelo
     x_train, y_train, x_test, y_test = load_data()
-    hist = train(basenet, x_train, y_train, x_test, y_test)
+    hist = train(model, x_train, y_train, x_test, y_test)
 
     # Evaluamos el modelo
-    score = evaluate(basenet, x_test, y_test)
+    score = evaluate(model, x_test, y_test)
+
+    # Guardamos los pesos aprendidos
+    if save_w:
+        model.save_weights(filename)
+
+    return score, hist
+
+#
+# APARTADO 1: BASENET
+#
+
+def basenet_model():
+    """Devuelve el modelo de referencia BaseNet."""
+
+    model = Sequential()
+
+    model.add(Conv2D(6,
+                     kernel_size = (5, 5),
+                     activation = 'relu',
+                     input_shape = INPUT_SHAPE))
+    model.add(MaxPooling2D(pool_size = (2, 2)))
+    model.add(Conv2D(16,
+                     kernel_size = (5, 5),
+                     activation='relu'))
+    model.add(MaxPooling2D(pool_size = (2, 2)))
+    model.add(Flatten())
+    model.add(Dense(50,
+                    activation = 'relu'))
+    model.add(Dense(N,
+                    activation = 'softmax'))
+
+    return model
+
+def ex1(show = True):
+    """Ejercicio 1 de la práctica 2. Entrenamiento y evaluación sobre
+       CIFAR100 con la red BaseNet.
+        - show: controla si se muestran las estadísticas de evaluación."""
+
+    score, hist = execute(basenet_model)
 
     # Mostramos estadísticas
-    show_stats(score, hist)
+    if show:
+        show_stats(score, hist)
 
-    # Guardamos pesos entrenados en un fichero en formato HDF5
-    file_w = "basenet_weights_" + str(EPOCHS) + ".h5"
-    basenet.save_weights(file_w)
-    print("\nPesos guardados en el fichero " + file_w)
+#
+# APARTADO 2: BASENET MEJORADO
+#
+
+def improved_basenet_model():
+    """Devuelve el modelo BaseNet mejorado."""
+
+    model = Sequential()
+
+    model.add(Conv2D(6,
+                     kernel_size = (5, 5),
+                     use_bias = False,
+                     input_shape = INPUT_SHAPE))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(MaxPooling2D(pool_size = (2, 2)))
+    model.add(Conv2D(16,
+                     kernel_size = (5, 5),
+                     use_bias = False))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(MaxPooling2D(pool_size = (2, 2)))
+    model.add(Flatten())
+    model.add(Dense(50,
+                    use_bias = False,
+                    activation = 'relu'))
+    model.add(BatchNormalization())
+    model.add(Dense(N,
+                    activation = 'softmax'))
+
+    return model
+
+def ex2(show = True):
+    """Ejercicio 2 de la práctica 2. Entrenamiento y evaluación sobre
+       CIFAR100 con la red BaseNet mejorada.
+        - show: controla si se muestran las estadísticas de evaluación."""
+
+    score, hist = execute(improved_basenet_model)
+
+    # Mostramos estadísticas
+    if show:
+        show_stats(score, hist)
+
+def compare():
+    """Comparar el modelo BaseNet con el modelo BaseNet mejorado."""
+
+    # Cargar el historial de entrenamiento de BaseNet
+    with open("basenet_hist_" + str(EPOCHS), 'rb') as f:
+        h1 = pickle.load(f)
+
+    # Ejecutar BaseNet mejorado
+    _, h2 = execute(improved_basenet_model)
+
+    show_evolution_val(h1, h2)
 
 #
 # FUNCIÓN PRINCIPAL
@@ -250,8 +355,11 @@ def ex1():
 def main():
     """Ejecuta la práctica 2 paso a paso."""
 
-    print("--- EJERCICIO 1: BASENET ---")
-    ex1()
+    #print("\n--- EJERCICIO 1: BASENET ---\n")
+    #ex1()
+
+    print("\n--- EJERCICIO 2: BASENET MEJORADO ---\n")
+    compare()
 
 if __name__ == "__main__":
   main()
