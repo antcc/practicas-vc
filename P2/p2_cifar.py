@@ -201,22 +201,18 @@ def train(model, x_train, y_train, x_test, y_test, save_hist = False):
 
     return hist
 
-def train_gen(model, datagen, x_train, y_train, save_hist = False):
+def train_gen(model, datagen, x_train, y_train, x_test, y_test, save_hist = False):
     """Entrenar el modelo con los datos de entrenamiento a partir de
        un generador de imágenes. Los parámetros y los valores devueltos son iguales
        que los de la función anterior."""
 
     hist = model.fit_generator(datagen.flow(x_train,
                                             y_train,
-                                            batch_size = BATCH_SIZE,
-                                            subset = 'training'),
+                                            batch_size = BATCH_SIZE),
                                epochs = EPOCHS,
-                               steps_per_epoch = len(x_train) * (1 - SPLIT) / BATCH_SIZE,
-                               validation_data = datagen.flow(x_train,
-                                                              y_train,
-                                                              batch_size = BATCH_SIZE,
-                                                              subset = 'validation'),
-                               validation_steps = len(x_train) * SPLIT / BATCH_SIZE)
+                               steps_per_epoch = len(x_train) / BATCH_SIZE,
+                               validation_data = (x_test, y_test),
+                               validation_steps = len(x_test) / BATCH_SIZE)
 
     if save_hist:
         with open("basenet_hist_" + str(EPOCHS), 'wb') as f:
@@ -284,15 +280,14 @@ def execute_gen(model_gen, filename = "", load_w = False, save_w = False):
     # Cargamos los datos y creamos los un generador
     x_train, y_train, x_test, y_test = load_data()
     datagen = ImageDataGenerator(featurewise_center = True,
-                                 featurewise_std_normalization = True,
-                                 validation_split = SPLIT)
+                                 featurewise_std_normalization = True)
 
     # Estandarizar datos de entrenamiento y test
     datagen.fit(x_train)
     datagen.standardize(x_test)
 
     # Entrenamos el modelo
-    hist = train_gen(model, datagen, x_train, y_train)
+    hist = train_gen(model, datagen, x_train, y_train, x_test, y_test)
 
     # Evaluamos el modelo
     score = evaluate(model, x_test, y_test)
