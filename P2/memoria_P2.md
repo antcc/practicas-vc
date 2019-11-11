@@ -10,3 +10,6 @@ def logloss(true_label, predicted, eps=1e-15):
 - Cortamos en 25 épocas porque se observa que el accuracy de validación comienza a bajar a partir de este número:
 
 imágenes: loss y accuracy hasta 30 épocas.
+
+- Batchnormalization already includes the addition of the bias term. So there is no need (and it makes no sense) to add another bias term in the convolution layer. Simply speaking BatchNorm shifts the activation by their mean values. Hence, any constant will be canceled out.
+          bn = gamma * normalized(x) + bias

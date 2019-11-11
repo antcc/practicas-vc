@@ -113,7 +113,7 @@ Es importante notar que devolvemos una máscara **normalizada**, en el sentido d
 
 Mostramos ahora algunos ejemplos de convolución con máscaras Gaussianas (obtenidos a partir de la función `separable_convolution2D`), de forma que el alisado es isotrópico.
 
-![Ejemplos de convolución con máscaras Gaussianas.](resources/ex1a_1.jpg)
+![Ejemplos de convolución con máscaras Gaussianas.](img/ex1a_1.jpg)
 
 Vemos en la Figura 1 que, como era de esperar, a mayor valor de $\sigma$ mayor emborronamiento se produce, pues se eliminan más altas frecuencias de la imagen perdiendo detalles en el proceso. Además, observamos que el tipo de borde empleado influye en el resultado final, pues en la alternativa de borde constante se aprecia un borde negro en la imagen resultante que no aparece en la alternativa con borde replicado. Los resultados son muy similares a los que se obtienen con una llamada a la función `GaussianBlur` de *OpenCV* con los mismos parámetros.
 
@@ -126,7 +126,7 @@ Análogamente se puede aproximar la derivada con respecto a $y$, e iterando el p
 Obtenemos la convolución con máscaras de derivadas mediante una llamada a la función `derivatives2D`. Un detalle a tener en cuenta es que se devuelve el valor absoluto de la imagen resultante, pues lo que nos interesa son los valores altos, tanto negativos como positivos (no queremos perder los valores negativos en la normalización posterior).
 
 
-![Ejemplos de convolución con máscaras de derivada.](resources/ex1a_2.jpg)
+![Ejemplos de convolución con máscaras de derivada.](img/ex1a_2.jpg)
 
 Vemos que en la derivada respecto de $x$ se aprecian los cambios en la dirección vertical, y que al aplicar la segunda derivada respecto de $y$ se aprecian los cambios más bruscos de la imagen en la dirección horizontal. En este caso el efecto del borde apenas es visible sobre el fondo negro.
 
@@ -150,7 +150,7 @@ Mediante este filtro podemos detectar algunos bordes, pues en los sitios donde h
 
 Notamos que este filtro ya está normalizado en escala, al estarlo el filtro Gaussiano que aplicamos inicialmente.
 
-![Ejemplos de filtrado con Laplaciana-de-Gaussiana.](resources/ex1b_1.jpg)
+![Ejemplos de filtrado con Laplaciana-de-Gaussiana.](img/ex1b_1.jpg)
 
 En este caso observamos que el efecto del borde constante es bastante visible. Una cosa curiosa es que en este caso la imagen se ve más oscurecida, dando la sensación de que se extiende el efecto del borde al resto de la imagen. Este fenónemo puede parecer extraño, pero creo que puede deberse a que se detecta un cambio de gran intensidad en el borde (al ser constante) que eclipsa los cambios del resto de la imagen, y hacen que al normalizarla se vea más oscura. Si utilizamos la función `Laplacian` de *OpenCV* vemos que el resultado es similar.
 
@@ -176,7 +176,7 @@ extra_rows = diff if diff > 0 else 0
 extra_cols = int(ncols / k)
 ```
 
-![Ejemplo de pirámide Gaussiana de 4 niveles.](resources/ex2a_1.jpg){width=450px}
+![Ejemplo de pirámide Gaussiana de 4 niveles.](img/ex2a_1.jpg){width=450px}
 
 Como podemos apreciar, la primera imagen es la imagen original, y cada nueva imagen en la pirámide se ve más emborronada, reteniendo efectivamente las frecuencias bajas en cada paso como se esperaría. El efecto del borde constante también es visible, como ya lo era al aplicar un solo alisado Gaussiano a la imagen. En el último nivel ya apenas podemos apreciar detalles, debido también al tamaño tan pequeño que tiene la imagen.
 
@@ -194,13 +194,13 @@ im_upsampled = cv2.resize(im, (x.shape[1], x.shape[0]),
 
 A la hora de la implementación podríamos haber reutilizado la función `gaussian_pyramid` del apartado anterior, pero no lo hemos hecho porque aquí permitimos que la reducción de tamaño de un nivel al siguiente sea un factor distinto de 2. El código para la construcción puede consultarse en la función `laplacian_pyramid`, y el de la reconstrucción en `reconstruct_im`. Ambos son autoexplicativos.
 
-![Ejemplo de pirámide Laplaciana de 4 niveles.](resources/ex2b_1.jpg){width=450px}
+![Ejemplo de pirámide Laplaciana de 4 niveles.](img/ex2b_1.jpg){width=450px}
 
 Observamos que efectivamente la pirámide está formada por las altas frecuencias de la imagen original (excepto el último nivel). En este ejemplo se ha usado borde replicado a la hora de convolucionar, por lo que el efecto en los bordes apenas es visible. Se puede comprobar que con borde constante se obtienen bordes negros alrededor de cada imagen, como cabría esperar visto lo que ocurría en apartados anteriores.
 
 Vemos en la Figura 6 que al reconstruir la imagen la diferencia con la original no es exactamente 0, debido a fallos de redondeo en las operaciones:
 
-![Ejemplo de reconstrucción a partir de pirámide Laplaciana.](resources/ex2b_2.jpg)
+![Ejemplo de reconstrucción a partir de pirámide Laplaciana.](img/ex2b_2.jpg)
 
 ## Apartado C
 
@@ -228,7 +228,7 @@ for p, lst in enumerate(index_lst):
 
 Hemos elegido 6 colores distintos para las 6 primera escalas, que luego van ciclando en el caso de que haya más escalas. Todo este código se encuentra en la función `blob_detection`.
 
-![Ejemplo de detección de regiones partiendo de $\sigma = 1$.](resources/ex2c_1.jpg)
+![Ejemplo de detección de regiones partiendo de $\sigma = 1$.](img/ex2c_1.jpg)
 
 Observamos en la Figura 7 que la detección de regiones dista de ser perfecta, si bien parece que acierta al detectar los bordes más notables en las imágenes (por ejemplo, los bigotes, ojos y orejas del gato). Al aumentar el número de escalas se encuentran regiones que previamente no se detectaban. La elección inicial de $\sigma$ también afecta a la cantidad de puntos detectada en las escalas, que disminuye más rápidamente conforme mayor sea $\sigma$. Esto tiene sentido, ya que se está realizando un alisado más agresivo que elimina los detalles de las imágenes.
 
@@ -257,29 +257,29 @@ Para simular el efecto de alejarse, construimos una pirámide Gaussiana para las
 
 Para esta pareja de imágenes se ha decidido que la imagen del perro será la que conserve las frecuencias bajas, mientras que la del gato tendrá las frecuencias altas, pues tiene más detalles (los bigotes, los pelos, las orejas...). Elegimos los valores $\sigma_1 = 5$ y $\sigma_2 = 7$.
 
-![Imagen híbrida perro-gato, con $\sigma_1 = 5$ y $\sigma_2 = 7$.](resources/ex3_1.jpg)
+![Imagen híbrida perro-gato, con $\sigma_1 = 5$ y $\sigma_2 = 7$.](img/ex3_1.jpg)
 
 Vemos como en la pirámide Gaussiana se aprecia lo que buscábamos: la primera imagen es prácticamente un gato, mientras que en el penúltimo nivel ya se observa la forma (un poco difusa) de un perro, sin haber rastro del gato.
 
-![Pirámide Gaussiana para la imagen híbrida perro-gato.](resources/ex3_2.jpg){width=400px}
+![Pirámide Gaussiana para la imagen híbrida perro-gato.](img/ex3_2.jpg){width=400px}
 
 ### Ejemplo 2: Marilyn-Einstein
 
 En este caso mezclamos dos fotos de Marilyn Monroe y de Albert Einstein. Como la foto del segundo tiene más detalles, la elegimos como segunda imagen (frecuencias altas). Además, el contorno del pelo de Marilyn hace que sea una gran candidata a estar en el fondo, pues así se disimula mejor a corta distancia. En este caso elegimos $\sigma_1 = 3$ y $\sigma_2 = 7$.
 
-![Imagen híbrida Marilyn-Einstein, con $\sigma_1 = 3$ y $\sigma_2 = 7$.](resources/ex3_3.jpg)
+![Imagen híbrida Marilyn-Einstein, con $\sigma_1 = 3$ y $\sigma_2 = 7$.](img/ex3_3.jpg)
 
 Vemos como en la primera imagen se aprecian todos los rasgos de Einstein, y el pelo de Marilyn que sobresale se disimula como contorno de la cara y el cuello. Al aumentar un poco el nivel en la pirámide se eliminan los detalles de Einstein y apreciamos a Marilyn en su totalidad.
 
-![Pirámide Gaussiana para la imagen híbrida Marilyn-Einstein.](resources/ex3_4.jpg){width=400px}
+![Pirámide Gaussiana para la imagen híbrida Marilyn-Einstein.](img/ex3_4.jpg){width=400px}
 
 ### Ejemplo 3: submarino-pez
 
 Elegimos el submarino como primera imagen (frecuencias bajas) ya que se camufla mejor con el fondo (es un objeto casi liso). Como la forma del pez coincide con la del submarino, este último hace las veces de contorno del pez, y no se nota demasiado de cerca. Elegimos $\sigma_1 = 3$ y $\sigma_2 = 7$.
 
-![Imagen híbrida submarino-pez, con $\sigma_1 = 3$ y $\sigma_2 = 7$.](resources/ex3_5.jpg)
+![Imagen híbrida submarino-pez, con $\sigma_1 = 3$ y $\sigma_2 = 7$.](img/ex3_5.jpg)
 
-![Pirámide Gaussiana para la imagen híbrida submarino-pez.](resources/ex3_6.jpg){width=400px}
+![Pirámide Gaussiana para la imagen híbrida submarino-pez.](img/ex3_6.jpg){width=400px}
 
 # Bonus 2
 
@@ -289,25 +289,25 @@ Mostramos ahora todas las parejas de imágenes híbridas a color, excepto la par
 
 En este caso volvemos a elegir la misma distribución de las imágenes, con la salvedad de que incrementamos ligeramente el alisado en la primera imagen, pues ahora el color del perro resalta más. Se elige $\sigma_1 = 6$ y  $\sigma_2 = 7$.
 
-![Pirámide Gaussiana de la imagen híbrida perro-gato.](resources/bonus2_1.jpg){width=400px}
+![Pirámide Gaussiana de la imagen híbrida perro-gato.](img/bonus2_1.jpg){width=400px}
 
 ### Pareja submarino-pez
 
 De nuevo elegimos la misma distribución de imágenes, y aumentamos también el alisado en la primera imagen, aunque los parámetros elegidos para la imagen en blanco y negro funcionan también bien. Se elige $\sigma_1 = 4$ y $\sigma_2 = 7$.
 
-![Pirámide Gaussiana de la imagen híbrida submarino-pez.](resources/bonus2_2.jpg){width=400px}
+![Pirámide Gaussiana de la imagen híbrida submarino-pez.](img/bonus2_2.jpg){width=400px}
 
 ### Pareja avión-pájaro
 
 En este caso hay que afinar un poco más, pues las dos siluetas no coinciden del todo. Intentamos arreglar esto emborronando mucho la imagen del avión para que de cerca apreciemos solo el pájaro. Parece que conseguimos más o menos lo que pretendemos con los valores $\sigma_1 = 9$ y $\sigma_2 = 7$.
 
-![Pirámide Gaussiana de la imagen híbrida avión-pájaro.](resources/bonus2_3.jpg){width=400px}
+![Pirámide Gaussiana de la imagen híbrida avión-pájaro.](img/bonus2_3.jpg){width=400px}
 
 ### Pareja moto-bici
 
 Esta imagen ha sido la más difícil de hibridar. Probé primero poniendo la bici en el fondo, pero los resultados no fueron muy satisfactorios. Decidí poner la moto en el fondo porque era un poco más gruesa y al difuminarse se camuflaba mejor. También es un problema que ambas imágenes tengan colores muy vivos, ya que en la imagen híbrida se aprecia siempre una mezcla de ambos. Finalmente he elegido los valores $\sigma_1 = 7$ y $\sigma_2 = 9$.
 
-![Pirámide Gaussiana de la imagen híbrida moto-bici.](resources/bonus2_4.jpg){width=400px}
+![Pirámide Gaussiana de la imagen híbrida moto-bici.](img/bonus2_4.jpg){width=400px}
 
 \newpage
 

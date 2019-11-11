@@ -33,8 +33,9 @@ from keras.optimizers import SGD
 # Función de pérdida
 from keras.losses import categorical_crossentropy
 
-# Conjunto de datos
+# Conjunto de datos y preprocesamiento
 from keras.datasets import cifar100
+from keras.preprocessing.image import ImageDataGenerator
 
 #
 # PARÁMETROS GLOBALES
@@ -43,6 +44,7 @@ from keras.datasets import cifar100
 N = 25                     # Número de clases
 EPOCHS = 25                # Épocas de entrenamiento
 BATCH_SIZE = 32            # Tamaño de cada batch de imágenes
+SPLIT = 0.1                # Partición para validación
 INPUT_SHAPE = (32, 32, 3)  # Formato de entrada de imágenes
 
 #
@@ -89,23 +91,6 @@ def load_data():
     y_test = np_utils.to_categorical(y_test, N)
 
     return x_train, y_train, x_test, y_test
-
-#
-# ACCURACY EN EL CONJUNTO DE TEST
-#
-
-def accuracy(labels, preds):
-    """Deuelve la medida de precisión o 'accuracy' de un modelo sobre el conjunto
-       de entrenamiento: porcentaje de etiquetas predichas correctamente frente
-       al total.
-        - labels: etiquetas correctas en formato matriz binaria.
-        - preds: etiquetas predichas en formato matriz binaria."""
-
-    # Convertir matrices a vectores
-    labels = np.argmax(labels, axis = 1)
-    preds = np.argmax(preds, axis = 1)
-
-    return sum(labels == preds) / len(labels)
 
 #
 # GRÁFICAS DE EVOLUCIÓN Y ESTADÍSTICAS
@@ -171,6 +156,17 @@ def show_stats(score, hist):
     print()
     show_evolution(hist)
 
+def show_stats_val(score, *hist):
+    """Muestra estadísticas de accuracy y loss y gráficas de evolución
+       en la validación."""
+
+    print("\n ------------- MODEL EVALUATION -------------")
+    print("Test loss: ", score[0])
+    print("Test accuracy: ", score[1])
+    print()
+    show_evolution_val(*hist)
+
+
 #
 # COMPILACIÓN DEL MODELO
 #
@@ -205,16 +201,32 @@ def train(model, x_train, y_train, x_test, y_test, save_hist = False):
 
     return hist
 
+def train_gen(model, datagen, x_train, y_train, save_hist = False):
+    """Entrenar el modelo con los datos de entrenamiento a partir de
+       un generador de imágenes. Los parámetros y los valores devueltos son iguales
+       que los de la función anterior."""
+
+    hist = model.fit_generator(datagen.flow(x_train,
+                                            y_train,
+                                            batch_size = BATCH_SIZE,
+                                            subset = 'training'),
+                               epochs = EPOCHS,
+                               steps_per_epoch = len(x_train) * (1 - SPLIT) / BATCH_SIZE,
+                               validation_data = datagen.flow(x_train,
+                                                              y_train,
+                                                              batch_size = BATCH_SIZE,
+                                                              subset = 'validation'),
+                               validation_steps = len(x_train) * SPLIT / BATCH_SIZE)
+
+    if save_hist:
+        with open("basenet_hist_" + str(EPOCHS), 'wb') as f:
+            pickle.dump(hist, f)
+
+    return hist
+
 #
-# PREDICCIÓN Y EVALUACIÓN SOBRE EL CONJUNTO DE TEST
+# EVALUACIÓN SOBRE EL CONJUNTO DE TEST
 #
-
-def predict(model, x_test):
-    """Predicción de etiquetas sobre el conjunto de test."""
-
-    preds = model.predict(x_test)
-
-    return preds
 
 def evaluate(model, x_test, y_test):
     """Evaluar el modelo sobre el conjunto de test."""
@@ -246,6 +258,41 @@ def execute(model_gen, filename = "", load_w = False, save_w = False):
     # Cargamos los datos y entrenamos el modelo
     x_train, y_train, x_test, y_test = load_data()
     hist = train(model, x_train, y_train, x_test, y_test)
+
+    # Evaluamos el modelo
+    score = evaluate(model, x_test, y_test)
+
+    # Guardamos los pesos aprendidos
+    if save_w:
+        model.save_weights(filename)
+
+    return score, hist
+
+def execute_gen(model_gen, filename = "", load_w = False, save_w = False):
+    """Construir, compilar, entrenar y evaluar un modelo a partir de un
+       generador de imágenes. Los parámetros y los valores devueltos son iguales
+       que los de la función anterior."""
+
+    # Construimos y compilamos el modelo
+    model = model_gen()
+    compile(model)
+
+    # Cargamos pesos precalculados
+    if load_w:
+        model.load_weights(filename)
+
+    # Cargamos los datos y creamos los un generador
+    x_train, y_train, x_test, y_test = load_data()
+    datagen = ImageDataGenerator(featurewise_center = True,
+                                 featurewise_std_normalization = True,
+                                 validation_split = SPLIT)
+
+    # Estandarizar datos de entrenamiento y test
+    datagen.fit(x_train)
+    datagen.standardize(x_test)
+
+    # Entrenamos el modelo
+    hist = train_gen(model, datagen, x_train, y_train)
 
     # Evaluamos el modelo
     score = evaluate(model, x_test, y_test)
@@ -330,7 +377,7 @@ def ex2(show = True):
        CIFAR100 con la red BaseNet mejorada.
         - show: controla si se muestran las estadísticas de evaluación."""
 
-    score, hist = execute(improved_basenet_model)
+    score, hist = execute_gen(improved_basenet_model)
 
     # Mostramos estadísticas
     if show:
@@ -340,13 +387,13 @@ def compare():
     """Comparar el modelo BaseNet con el modelo BaseNet mejorado."""
 
     # Cargar el historial de entrenamiento de BaseNet
-    with open("basenet_hist_" + str(EPOCHS), 'rb') as f:
+    with open("basenet_hist_25", 'rb') as f:
         h1 = pickle.load(f)
 
     # Ejecutar BaseNet mejorado
-    _, h2 = execute(improved_basenet_model)
+    s2, h2 = execute_gen(basenet_model)
 
-    show_evolution_val(h1, h2)
+    show_stats_val(s2, h1, h2)
 
 #
 # FUNCIÓN PRINCIPAL
@@ -355,8 +402,8 @@ def compare():
 def main():
     """Ejecuta la práctica 2 paso a paso."""
 
-    #print("\n--- EJERCICIO 1: BASENET ---\n")
-    #ex1()
+    """print("\n--- EJERCICIO 1: BASENET ---\n")
+    ex1()"""
 
     print("\n--- EJERCICIO 2: BASENET MEJORADO ---\n")
     compare()
