@@ -23,8 +23,8 @@ import keras.utils as np_utils
 
 # Modelos y capas
 from keras.models import Sequential
-from keras.layers import Dense, Conv2D
-from keras.layers import Flatten, MaxPooling2D, Activation
+from keras.layers import Conv2D, MaxPooling2D
+from keras.layers import Dense, Flatten, Activation, Dropout
 from keras.layers import BatchNormalization
 
 # Optimizador
@@ -32,6 +32,9 @@ from keras.optimizers import SGD
 
 # Función de pérdida
 from keras.losses import categorical_crossentropy
+
+# Callbacks
+from keras.callbacks import EarlyStopping, ModelCheckpoint, History
 
 # Conjunto de datos y preprocesamiento
 from keras.datasets import cifar100
@@ -41,11 +44,14 @@ from keras.preprocessing.image import ImageDataGenerator
 # PARÁMETROS GLOBALES
 #
 
-N = 25                     # Número de clases
-EPOCHS = 25                # Épocas de entrenamiento
-BATCH_SIZE = 32            # Tamaño de cada batch de imágenes
-SPLIT = 0.1                # Partición para validación
-INPUT_SHAPE = (32, 32, 3)  # Formato de entrada de imágenes
+N = 25                      # Número de clases
+EPOCHS = 50                 # Épocas de entrenamiento
+BATCH_SIZE = 32             # Tamaño de cada batch de imágenes
+SPLIT = 0.1                 # Partición para validación
+INPUT_SHAPE = (32, 32, 3)   # Formato de entrada de imágenes
+PATIENCE = 5                # Épocas que esperar mientras el modelo no mejora
+DIR = "net/"                # Directorio para guardar/cargar información de la red
+ACC_NAME = "accuracy"       # Nombre de la métrica de precisión
 
 #
 # FUNCIONES AUXILIARES
@@ -113,8 +119,8 @@ def show_evolution(hist):
     wait()
 
     # Evolución del accuracy
-    acc = hist.history['accuracy']
-    val_acc = hist.history['val_accuracy']
+    acc = hist.history[ACC_NAME]
+    val_acc = hist.history["val_" + ACC_NAME]
     plt.plot(acc)
     plt.plot(val_acc)
     plt.legend(["Training accuracy", "Validation accuracy"])
@@ -139,7 +145,7 @@ def show_evolution_val(*hist):
 
     # Evolución del accuracy
     for h in hist:
-        val_acc = h.history['val_accuracy']
+        val_acc = h.history["val_" + ACC_NAME]
         plt.plot(val_acc)
 
     plt.legend(["Validation accuracy " + str(i + 1) for i in range(len(hist))])
@@ -158,7 +164,7 @@ def show_stats(score, hist):
 
 def show_stats_val(score, *hist):
     """Muestra estadísticas de accuracy y loss y gráficas de evolución
-       en la validación."""
+       en validación."""
 
     print("\n ------------- MODEL EVALUATION -------------")
     print("Test loss: ", score[0])
@@ -166,6 +172,22 @@ def show_stats_val(score, *hist):
     print()
     show_evolution_val(*hist)
 
+#
+# ACCURACY EN EL CONJUNTO DE TEST
+#
+
+def accuracy(labels, preds):
+    """Deuelve la medida de precisión o 'accuracy' de un modelo sobre el conjunto
+       de entrenamiento: porcentaje de etiquetas predichas correctamente frente
+       al total.
+        - labels: etiquetas correctas en formato matriz binaria.
+        - preds: etiquetas predichas en formato matriz binaria."""
+
+    # Convertir matrices a vectores
+    labels = np.argmax(labels, axis = 1)
+    preds = np.argmax(preds, axis = 1)
+
+    return sum(labels == preds) / len(labels)
 
 #
 # COMPILACIÓN DEL MODELO
@@ -196,33 +218,58 @@ def train(model, x_train, y_train, x_test, y_test, save_hist = False):
                      verbose = 1,
                      validation_data = (x_test, y_test))
     if save_hist:
-        with open("basenet_hist_" + str(EPOCHS), 'wb') as f:
+        with open(DIR + "basenet_hist_" + str(EPOCHS), 'wb') as f:
             pickle.dump(hist, f)
 
     return hist
 
-def train_gen(model, datagen, x_train, y_train, x_test, y_test, save_hist = False):
+def train_gen(model, datagen, x_train, y_train, save_hist = False):
     """Entrenar el modelo con los datos de entrenamiento a partir de
-       un generador de imágenes. Los parámetros y los valores devueltos son iguales
-       que los de la función anterior."""
+       un generador de imágenes. El significado de los parámetros y los valores
+       devueltos es el mismo que el de la función anterior."""
+
+    early_stopping = EarlyStopping(monitor = "val_" + ACC_NAME,
+                                   patience = PATIENCE,
+                                   restore_best_weights = True)
+    checkpointer = ModelCheckpoint(monitor = "val_" + ACC_NAME,
+                                   filepath = DIR + "temp_improved_basenet_weights.h5",
+                                   verbose = 1,
+                                   save_weights_only = True,
+                                   save_best_only = True)
 
     hist = model.fit_generator(datagen.flow(x_train,
                                             y_train,
-                                            batch_size = BATCH_SIZE),
+                                            batch_size = BATCH_SIZE,
+                                            subset = 'training'),
                                epochs = EPOCHS,
-                               steps_per_epoch = len(x_train) / BATCH_SIZE,
-                               validation_data = (x_test, y_test),
-                               validation_steps = len(x_test) / BATCH_SIZE)
+                               steps_per_epoch = len(x_train) * (1 - SPLIT) / BATCH_SIZE,
+                               verbose = 1,
+                               workers = 4,
+                               validation_data = datagen.flow(x_train,
+                                                              y_train,
+                                                              batch_size = BATCH_SIZE,
+                                                              subset = 'validation'),
+                               validation_steps = len(x_train) * SPLIT / BATCH_SIZE,
+                               callbacks = [early_stopping, checkpointer])
+
+    print("\nMejores pesos obtenidos en la época", len(hist.epoch) - PATIENCE)
 
     if save_hist:
-        with open("basenet_hist_" + str(EPOCHS), 'wb') as f:
+        with open(DIR + "improved_basenet_hist", 'wb') as f:
             pickle.dump(hist, f)
 
     return hist
 
 #
-# EVALUACIÓN SOBRE EL CONJUNTO DE TEST
+# PREDICCIÓN Y EVALUACIÓN SOBRE EL CONJUNTO DE TEST
 #
+
+def predict(model, x_test):
+    """Predicción de etiquetas sobre el conjunto de test."""
+
+    preds = model.predict(x_test)
+
+    return preds
 
 def evaluate(model, x_test, y_test):
     """Evaluar el modelo sobre el conjunto de test."""
@@ -246,14 +293,19 @@ def execute(model_gen, filename = "", load_w = False, save_w = False):
     # Construimos y compilamos el modelo
     model = model_gen()
     compile(model)
+    print(model.summary())
 
-    # Cargamos pesos precalculados
+    # Cargamos los datos
+    x_train, y_train, x_test, y_test = load_data()
+
+    # Historial de entrenamiento
+    hist = History()
+
+    # Cargamos pesos precalculados o entrenamos el modelo
     if load_w:
         model.load_weights(filename)
-
-    # Cargamos los datos y entrenamos el modelo
-    x_train, y_train, x_test, y_test = load_data()
-    hist = train(model, x_train, y_train, x_test, y_test)
+    else:
+        hist = train(model, x_train, y_train, x_test, y_test)
 
     # Evaluamos el modelo
     score = evaluate(model, x_test, y_test)
@@ -272,22 +324,32 @@ def execute_gen(model_gen, filename = "", load_w = False, save_w = False):
     # Construimos y compilamos el modelo
     model = model_gen()
     compile(model)
+    print(model.summary())
 
-    # Cargamos pesos precalculados
-    if load_w:
-        model.load_weights(filename)
-
-    # Cargamos los datos y creamos los un generador
+    # Cargamos los datos
     x_train, y_train, x_test, y_test = load_data()
-    datagen = ImageDataGenerator(featurewise_center = True,
-                                 featurewise_std_normalization = True)
 
-    # Estandarizar datos de entrenamiento y test
+    # Creamos un generador para las imágenes con data augmentation
+    datagen = ImageDataGenerator(featurewise_center = True,
+                                 featurewise_std_normalization = True,
+                                 width_shift_range = 0.1,
+                                 height_shift_range = 0.1,
+                                 zoom_range = 0.2,
+                                 horizontal_flip = True,
+                                 validation_split = SPLIT)
+
+    # Estandarizamos datos de entrenamiento y test
     datagen.fit(x_train)
     datagen.standardize(x_test)
 
-    # Entrenamos el modelo
-    hist = train_gen(model, datagen, x_train, y_train, x_test, y_test)
+    # Historial de entrenamiento
+    hist = History()
+
+    # Cargamos pesos precalculados o entrenamos el modelo
+    if load_w:
+        model.load_weights(filename)
+    else:
+        hist = train_gen(model, datagen, x_train, y_train)
 
     # Evaluamos el modelo
     score = evaluate(model, x_test, y_test)
@@ -344,24 +406,43 @@ def improved_basenet_model():
 
     model = Sequential()
 
-    model.add(Conv2D(6,
-                     kernel_size = (5, 5),
+    model.add(Conv2D(32,
+                     kernel_size = (3, 3),
                      use_bias = False,
                      input_shape = INPUT_SHAPE))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
-    model.add(MaxPooling2D(pool_size = (2, 2)))
-    model.add(Conv2D(16,
-                     kernel_size = (5, 5),
+
+    model.add(Conv2D(32,
+                     kernel_size = (3, 3),
                      use_bias = False))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
+
     model.add(MaxPooling2D(pool_size = (2, 2)))
+    model.add(Dropout(0.25))
+
+    model.add(Conv2D(64,
+                     kernel_size = (3, 3),
+                     use_bias = False))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+
+    model.add(Conv2D(64,
+                     kernel_size = (3, 3),
+                     use_bias = False))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+
+    model.add(MaxPooling2D(pool_size = (2, 2)))
+    model.add(Dropout(0.25))
+
     model.add(Flatten())
-    model.add(Dense(50,
+    model.add(Dense(512,
                     use_bias = False,
                     activation = 'relu'))
     model.add(BatchNormalization())
+    model.add(Dropout(0.5))
     model.add(Dense(N,
                     activation = 'softmax'))
 
@@ -382,11 +463,11 @@ def compare():
     """Comparar el modelo BaseNet con el modelo BaseNet mejorado."""
 
     # Cargar el historial de entrenamiento de BaseNet
-    with open("basenet_hist_25", 'rb') as f:
+    with open(DIR + "basenet_hist_25", 'rb') as f:
         h1 = pickle.load(f)
 
     # Ejecutar BaseNet mejorado
-    s2, h2 = execute_gen(basenet_model)
+    s2, h2 = execute_gen(improved_basenet_model)
 
     show_stats_val(s2, h1, h2)
 
@@ -397,10 +478,11 @@ def compare():
 def main():
     """Ejecuta la práctica 2 paso a paso."""
 
-    """print("\n--- EJERCICIO 1: BASENET ---\n")
-    ex1()"""
+    print("\n--- EJERCICIO 1: BASENET ---\n")
+    ex1()
 
     print("\n--- EJERCICIO 2: BASENET MEJORADO ---\n")
+    #ex2()
     compare()
 
 if __name__ == "__main__":
