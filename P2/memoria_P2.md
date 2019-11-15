@@ -16,7 +16,15 @@ imágenes: loss y accuracy hasta 30 épocas.
 
 - keras example: https://github.com/keras-team/keras/blob/master/examples/cifar10_cnn.py
 
-- El nombre 'acc' o 'accuracy' cambia según si estamos en local o en Colab. Se usa la variable ACC_NAME.
+TODO: convoluciones 1x1 
+
+---------- BASENET MODEL EVALUATION ----------
+Test loss: 1.9765710914611816
+Test accuracy: 0.4304
+
+---------- IMPROVED_BASENET MODEL EVALUATION ----------
+Test loss: 1.10208120470047
+Test accuracy: 0.6576
 
 - Apartado 3:
 
