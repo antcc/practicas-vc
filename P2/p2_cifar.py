@@ -50,13 +50,13 @@ from keras.preprocessing.image import ImageDataGenerator
 N = 25                      # Número de clases
 EPOCHS = 100                # Épocas de entrenamiento
 BATCH_SIZE = 64             # Tamaño de cada batch de imágenes
-SPLIT = 0.2                 # Partición para validación
+SPLIT = 0.1                 # Partición para validación
 INPUT_SHAPE = (32, 32, 3)   # Formato de entrada de imágenes
-PATIENCE = 5                # Épocas que esperar mientras el modelo no mejora
+PATIENCE = 10               # Épocas que esperar mientras el modelo no mejora
 TAM = (10, 5)               # Tamaño del plot
-TEMP = True                 # Generar archivos temporales o definitivos
+TEMP = False                # Generar archivos temporales o definitivos
 ACC_NAME = "acc"            # Nombre de la métrica de precisión
-DIR = "net/"                # Directorio de trabajo
+DIR = "./"                  # Directorio de trabajo
 
 #
 # FUNCIONES AUXILIARES
@@ -202,23 +202,6 @@ def show_stats_val(*stats, names, show = True):
         show_evolution_val(*stats[len(names):], names = names)
 
 #
-# ACCURACY EN EL CONJUNTO DE TEST
-#
-
-def accuracy(labels, preds):
-    """Deuelve la medida de precisión o 'accuracy' de un modelo sobre el conjunto
-       de entrenamiento: porcentaje de etiquetas predichas correctamente frente
-       al total.
-        - labels: etiquetas correctas en formato matriz binaria.
-        - preds: etiquetas predichas en formato matriz binaria."""
-
-    # Convertimos matrices a vectores
-    labels = np.argmax(labels, axis = 1)
-    preds = np.argmax(preds, axis = 1)
-
-    return sum(labels == preds) / len(labels)
-
-#
 # COMPILACIÓN DEL MODELO
 #
 
@@ -307,18 +290,13 @@ def train(model, model_name, datagen, x_train, y_train,
     return hist
 
 #
-# PREDICCIÓN Y EVALUACIÓN SOBRE EL CONJUNTO DE TEST
+# EVALUACIÓN SOBRE EL CONJUNTO DE TEST
 #
 
-def predict(model, x_test):
-    """Predicción de etiquetas sobre el conjunto de test."""
-
-    preds = model.predict(x_test)
-
-    return preds
-
 def evaluate(model, x_test, y_test):
-    """Evaluar el modelo sobre el conjunto de test."""
+    """Evaluar el modelo sobre el conjunto de test.
+        - model: modelo a usar para evaluar.
+        - x_test, y_test: datos de test."""
 
     score = model.evaluate(x_test, y_test, verbose = 0)
 
@@ -374,12 +352,13 @@ def execute(model_gen, preproc,
         # Generador para las imágenes sin preprocesamiento
         datagen = ImageDataGenerator(validation_split = SPLIT)
 
-    # Cargamos pesos precalculados o entrenamos el modelo
+    # Cargamos pesos precalculados
     if load_w:
+        print("\nCargando pesos precalculados de " + file_w)
         model.load_weights(file_w)
-        hist = History()
-    else:
-        hist = train(model, model_name, datagen, x_train, y_train, save_h, save_w)
+
+    # Entrenamos el modelo
+    hist = train(model, model_name, datagen, x_train, y_train, save_h, save_w)
 
     # Evaluamos el modelo
     score = evaluate(model, x_test, y_test)
@@ -439,33 +418,31 @@ def improved_basenet_model():
     model = Sequential()
 
     model.add(Conv2D(32,
+                     padding = 'same',
                      kernel_size = (3, 3),
                      use_bias = False,
                      input_shape = INPUT_SHAPE))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
-
     model.add(Conv2D(32,
                      kernel_size = (3, 3),
                      use_bias = False))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
-
     model.add(MaxPooling2D(pool_size = (2, 2)))
     model.add(Dropout(0.25))
 
     model.add(Conv2D(64,
+                     padding = 'same',
                      kernel_size = (3, 3),
                      use_bias = False))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
-
     model.add(Conv2D(64,
                      kernel_size = (3, 3),
                      use_bias = False))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
-
     model.add(MaxPooling2D(pool_size = (2, 2)))
     model.add(Dropout(0.25))
 
@@ -474,7 +451,6 @@ def improved_basenet_model():
                     use_bias = False,
                     activation = 'relu'))
     model.add(BatchNormalization())
-
     model.add(Dense(256,
                     use_bias = False,
                     activation = 'relu'))
@@ -518,7 +494,7 @@ def compare(show = True):
     with open(DIR + "improved_basenet_score", 'rb') as f2:
         s2 = pickle.load(f2)
 
-    # Mostramos estadísticas
+    # Mostramos estadísticas en validación
     show_stats_val(s1, s2, h1, h2,
                    names = ["basenet", "improved_basenet"], show = show)
 
@@ -527,16 +503,16 @@ def compare(show = True):
 #
 
 def main():
-    """Ejecuta la práctica 2 paso a paso."""
+    """Ejecuta la primera parte de la práctica 2 paso a paso."""
 
-    # Do not show Tensorflow warnings
+    # No mostrar warnings de TensorFlow
     logging.set_verbosity(logging.ERROR)
 
     print("\n--- EJERCICIO 1: BASENET ---\n")
-    #ex1()
+    ex1()
 
     print("\n--- EJERCICIO 2: BASENET MEJORADO ---\n")
-    #ex2()
+    ex2()
 
     print("\n--- COMPARACIÓN: BASENET VS BASENET MEJORADO ---\n")
     compare()
