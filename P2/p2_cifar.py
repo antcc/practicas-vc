@@ -47,16 +47,16 @@ from keras.preprocessing.image import ImageDataGenerator
 # PARÁMETROS GLOBALES
 #
 
-N = 25                      # Número de clases
-EPOCHS = 100                # Épocas de entrenamiento
-BATCH_SIZE = 64             # Tamaño de cada batch de imágenes
-SPLIT = 0.1                 # Partición para validación
-INPUT_SHAPE = (32, 32, 3)   # Formato de entrada de imágenes
-PATIENCE = 10               # Épocas que esperar mientras el modelo no mejora
-TAM = (10, 5)               # Tamaño del plot
-TEMP = False                # Generar archivos temporales o definitivos
-ACC_NAME = "acc"            # Nombre de la métrica de precisión
-DIR = "./"                  # Directorio de trabajo
+N = 25                             # Número de clases
+EPOCHS = 100                       # Épocas de entrenamiento
+BATCH_SIZE = 64                    # Tamaño de cada batch de imágenes
+SPLIT = 0.1                        # Partición para validación
+INPUT_SHAPE = (32, 32, 3)          # Formato de entrada de imágenes
+PATIENCE = 10                      # Épocas que esperar mientras el modelo no mejora
+TAM = (10, 5)                      # Tamaño del plot
+TEMP = False                       # Generar archivos temporales o definitivos
+ACC_NAME = "acc"                   # Nombre de la métrica de precisión
+DIR = "./"                         # Directorio de trabajo
 
 #
 # FUNCIONES AUXILIARES
@@ -402,8 +402,7 @@ def ex1(show = True):
         - show: controla si se muestran gráficas con estadísticas."""
 
     # Ejecutamos el modelo
-    score, hist = execute(basenet_model, preproc = False,
-                          save_s = True, save_h = True, save_w = True)
+    score, hist = execute(basenet_model, preproc = False)
 
     # Mostramos estadísticas
     show_stats(score, hist, "basenet", show = show)
@@ -448,13 +447,13 @@ def improved_basenet_model():
 
     model.add(Flatten())
     model.add(Dense(512,
-                    use_bias = False,
-                    activation = 'relu'))
+                    use_bias = False))
     model.add(BatchNormalization())
+    model.add(Activation('relu'))
     model.add(Dense(256,
-                    use_bias = False,
-                    activation = 'relu'))
+                    use_bias = False))
     model.add(BatchNormalization())
+    model.add(Activation('relu'))
     model.add(Dropout(0.5))
 
     model.add(Dense(N,
@@ -468,8 +467,7 @@ def ex2(show = True):
         - show: controla si se muestran gráficas con estadísticas."""
 
     # Ejecutamos el modelo
-    score, hist = execute(improved_basenet_model, preproc = True,
-                          save_s = True, save_h = True, save_w = True)
+    score, hist = execute(improved_basenet_model, preproc = True)
 
     # Mostramos estadísticas
     show_stats(score, hist, "improved_basenet", show = show)
@@ -513,9 +511,6 @@ def main():
 
     print("\n--- EJERCICIO 2: BASENET MEJORADO ---\n")
     ex2()
-
-    print("\n--- COMPARACIÓN: BASENET VS BASENET MEJORADO ---\n")
-    compare()
 
 if __name__ == "__main__":
  main()

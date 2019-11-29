@@ -8,6 +8,9 @@
 # Antonio Coín Castro.
 #############################################################################
 
+# Es necesario tener una carpeta llamada `caltech` que contenga
+# las imágenes a cargar, y los archivos test.txt y train.txt
+
 #
 # LIBRERÍAS
 #
@@ -55,6 +58,7 @@ INPUT_SHAPE = INPUT_SIZE + (3,)       # Formato de entrada de imágenes
 OUTPUT_SHAPE = (7, 7) + OUTPUT_SIZE   # Formato de salida de imágenes
 TAM = (10, 5)                         # Tamaño del plot
 ACC_NAME = "acc"                      # Nombre de la métrica de precisión
+DIR = "caltech/"
 
 #
 # FUNCIONES AUXILIARES
@@ -333,7 +337,6 @@ def fc_model():
                     input_shape = OUTPUT_SIZE))
     model.add(Dense(512, activation = 'relu'))
     model.add(Dropout(0.7))
-
     model.add(Dense(N, activation = 'softmax'))
 
     return model
@@ -350,7 +353,6 @@ def conv_model():
                      input_shape = OUTPUT_SHAPE))
     model.add(BatchNormalization())
     model.add(Dropout(0.5))
-
     model.add(Flatten())
     model.add(Dense(1024,
                     activation = 'relu',
@@ -447,7 +449,7 @@ def resnet_fine_tuning(show = True, save_w = False, load_w = False):
 
     # Definimos un nuevo modelo a partir de ResNet50
     output = fc_model_2(resnet.output)
-    model = Model(inputs=resnet.input, outputs=output)
+    model = Model(inputs = resnet.input, outputs = output)
 
     # Mostramos el modelo
     print(model.summary())
