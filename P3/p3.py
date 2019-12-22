@@ -25,7 +25,7 @@ import random
 PATH = "imagenes/"    # Carpeta de imágenes
 WINDOW_SIZE = 3       # Tamaño de ventana para esquinas
 WINDOW_SIZE_F = 7     # Tamaño de ventana para supresión de no máximos
-THRESHOLD = 1000        # Umbral para máximos en el espacio de escalas
+THRESHOLD = 10        # Umbral para máximos en el espacio de escalas
 NUM_MAX = 1100        # Número de máximos en el espacio de escalas
 ZOOM = 5              # Factor de zoom
 WIDTH, HEIGHT = 7, 7  # Tamaño por defecto del plot
@@ -274,8 +274,6 @@ def harris_detection(im, levels):
         # Guardamos el resultado de la octava actual
         im_scale_kp.append(im_kp.astype(np.float32)[:orig_rows // 2 ** s, :orig_cols // 2 ** s])
 
-        return im_scale_kp, im_scale_kp, keypoints_orig  #TODO cambiar umbral a 10
-
         # Actualizamos el tamaño de ventana y el número de puntos a detectar
         if window > 3:
             window = window - 2
@@ -302,8 +300,8 @@ def refine_corners(im, keypoints):
     res = []
     win_size = (3, 3)
     zero_zone = (-1, -1)
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.1)
-    points = np.array([p.pt[::-1] for p in keypoints], dtype = np.uint32)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.01)
+    points = np.array([p.pt for p in keypoints], dtype = np.uint32)
     corners = points.reshape(len(keypoints), 1, 2).astype(np.float32)
 
     # Calculamos las coordenadas subpixel de los KeyPoints
@@ -321,98 +319,46 @@ def refine_corners(im, keypoints):
 
     for index in selected_points:
         # Recuperamos las coordenadas originales e interpoladas
-        x, y = points[index][:2]
-        rx, ry = corners[index][0][:2]
+        y, x = points[index][:2]
+        ry, rx = corners[index][0][:2]
 
         # Pasamos la imagen original a color para dibujar sobre ella
         im_rgb = gray2rgb(im).astype(np.float32)
 
-        # Interpolamos con zoom de 5x
-        im_rgb = cv2.resize(im_rgb, None, fx = ZOOM, fy = ZOOM)
+        # Seleccionamos una ventana 11x11 alrededor del punto original
+        t = x - 5 if x - 5 >= 0 else 0
+        b = x + 5 + 1
+        l = y - 5 if y - 5 >= 0 else 0
+        r = y + 5 + 1
+        window = im_rgb[t:b, l:r]
 
-        # Dibujamos en rojo el punto original
-        im_rgb = cv2.circle(im_rgb, (ZOOM * y, ZOOM * x), 3, (255, 0, 0))
+        # Interpolamos con zoom de 5x
+        window = cv2.resize(window, None, fx = ZOOM, fy = ZOOM)
+
+        # Dibujamos en rojo el punto original en el centro
+        window = cv2.circle(window, (ZOOM * 5 + 1, ZOOM * 5 + 1), 3, (255, 0, 0))
 
         # Dibujamos en verde el punto corregido
-        im_rgb = cv2.circle(im_rgb, (int(ZOOM * ry), int(ZOOM * rx)), 3, (0, 255, 0))
-
-        # Seleccionamos una ventana 11x11 alrededor del punto original
-        t = ZOOM * (x - 5) if ZOOM * (x - 5) >= 0 else 0
-        b = ZOOM * (x + 5 + 1)
-        l = ZOOM * (y - 5) if ZOOM * (y - 5) >= 0 else 0
-        r = ZOOM * (y + 5 + 1)
-        window = im_rgb[t:b, l:r]
+        window = cv2.circle(window, (int(ZOOM * (5 + ry - y) + 1), int(ZOOM * (5 + rx - x) + 1)), 3, (0, 255, 0))
 
         res.append(window)
 
     return res
 
-    r = 4 # Radius from the center
-    z = 5 # Zoom
-    result = np.zeros(((2 * r + 1) * z, (2 * r + 1) * z * random_points, 3), dtype = np.uint8)
-
-    for i in range(random_points):
-        subregion = np.zeros((r * z, r * z, 3), dtype = np.uint8)
-        # First Point
-        rand = random_unique_ints[i]
-        # Pixels
-        mx = int(maximums[rand].pt[0])
-        my = int(maximums[rand].pt[1])
-        # Subpixels
-        smx = subpixels[i][0]
-        smy = subpixels[i][1]
-
-        # dx, dy
-        dx = smx - mx
-        dy = smy - my
-
-
-        # Take rubregion
-        subregion = img[my - r: my + r + 1, mx - r : mx + r + 1]
-        # Zoom it
-        subregion = cv2.resize(subregion, None, fx = z, fy = z, interpolation = cv2.INTER_NEAREST)
-        subregion = cv2.cvtColor(subregion, cv2.COLOR_GRAY2BGR)
-
-        # Draw Pixel Corner
-        cv2.drawMarker(
-            subregion,
-            (r * z, r * z),
-            (0, 0, 255),
-            markerType = cv2.MARKER_STAR,
-            markerSize = z,
-            thickness = 1,
-            line_type = cv2.LINE_AA
-        )
-
-        # Draw Sub Cornel
-        cv2.drawMarker(
-            subregion,
-            (int((r + dx) * z), int((r + dy) * z)),
-            (0, 255, 0),
-            markerType = cv2.MARKER_DIAMOND,
-            markerSize = z,
-            thickness = 1,
-            line_type = cv2.LINE_AA
-        )
-
-        result[:, i * subregion.shape[0] : (i + 1) * subregion.shape[0], :] = subregion
-
 def ex1():
     """Ejemplo de ejecución del ejercicio 1."""
 
-    im1 = read_im(PATH + "Tablero1.jpg")
+    im1 = read_im(PATH + "yosemite1.jpg")
     im2 = read_im(PATH + "yosemite2.jpg")
 
     print("Detectando puntos Harris en yosemite1.jpg...\n")
     h1_scale, h1_orig, h1_keypoints = harris_detection(im1, 3)
-    #print_im(format_pyramid(h1_scale))
-    #print_im(h1_orig)
+    print_im(format_pyramid(h1_scale))
+    print_im(h1_orig)
 
     print("\nMostrando coordenadas subpíxel corregidas en yosemite1.jpg...\n")
     subpix1 = refine_corners(im1, h1_keypoints)
     print_multiple_im(subpix1)
-
-    exit()
 
     print("\nDetectando puntos Harris en yosemite2.jpg...\n")
     h2_scale, h2_orig, h2_keypoints = harris_detection(im2, 3)
@@ -521,16 +467,13 @@ def ex2():
 # EJERCICIO 3: MOSAICO CON 2 IMÁGENES
 #
 
-def canvas_central_homography(h, w):
-    pass
-
 def ex3():
     """Ejemplo de ejecución del ejercicio 3."""
 
     im1 = read_im(PATH + "yosemite1.jpg", 1)
     im2 = read_im(PATH + "yosemite2.jpg", 1)
 
-    # Definimos un canvas
+    # Definimos un canvas suponiendo que las imágenes tienen la misma altura
     h, w = im1.shape[0], 940
     canvas = np.zeros((h, w, 3), dtype = np.float32)
 
@@ -547,10 +490,62 @@ def ex3():
     train = np.array([kp1[match.trainIdx].pt for match in matches])
 
     # Coincide en este caso con la homografía que lleva la segunda imagen al mosaico
-    H21 = cv2.findHomography(query, train, cv2.RANSAC, 1)[0]
+    H21 = cv2.findHomography(query, train, cv2.RANSAC)[0]
 
     # Trasladamos la segunda imagen al mosaico
     canvas = cv2.warpPerspective(im2, H21, (w, h), dst = canvas, borderMode = cv2.BORDER_TRANSPARENT)
+
+    # Mostramos el mosaico
+    print_im(canvas)
+
+#
+# EJERCICIO 4: MOSAICO CON N IMÁGENES
+#
+
+def ex4(ims, w):
+    """Ejemplo de ejecución del ejercicio 4.
+        - ims: imágenes para construir el mosaico.
+        - w: anchura del mosaico."""
+
+    central = len(ims) // 2
+
+    # Definimos un canvas suponiendo que las imágenes tienen la misma altura
+    h = ims[0].shape[0] + 20
+    canvas = np.zeros((h, w, 3), dtype = np.float32)
+
+    # Calculamos la homografía (traslación) que lleva la imagen central al mosaico
+    tx = (w - ims[central].shape[1]) / 2
+    ty = (h - ims[central].shape[0]) / 2
+    H0 = np.array([[1, 0, tx], [0, 1, ty], [0, 0, 1]])
+
+    # Calculamos las homografías entre cada dos imágenes
+    homographies = []
+    for i in range(len(ims)):
+        if i != central:
+            j = i + 1 if i < central else i - 1
+
+            kp1, desc1 = akaze_descriptor(ims[i])
+            kp2, desc2 = akaze_descriptor(ims[j])
+
+            matches = matches_lowe_2nn(desc1, desc2)
+
+            query = np.array([kp1[match.queryIdx].pt for match in matches])
+            train = np.array([kp2[match.trainIdx].pt for match in matches])
+
+            homographies.append(cv2.findHomography(query, train, cv2.RANSAC)[0])
+
+        else: # No se usa la posición central
+            homographies.append(np.array([]))
+
+    # Trasladamos cada imagen al mosaico
+    for i in range(len(ims)):
+        H = H0
+        
+        for j in range(abs(i - central)):
+            k = central - j - 1 if i < central else central + j + 1
+            H = H @ homographies[k]
+
+        canvas = cv2.warpPerspective(ims[i], H, (w, h), dst = canvas, borderMode = cv2.BORDER_TRANSPARENT)
 
     # Mostramos el mosaico
     print_im(canvas)
@@ -563,13 +558,23 @@ def main():
     """Ejecuta la práctica 3 paso a paso. Cada apartado es una llamada a una función."""
 
     print("--- EJERCICIO 1: DETECTOR DE HARRIS ---\n")
-    ex1()
+    #ex1()
 
     print("\n--- EJERCICIO 2: CORRESPONDENCIAS ENTRE KEYPOINTS ---\n")
     #ex2()
 
     print("\n--- EJERCICIO 3: MOSAICO CON 2 IMÁGENES ---\n")
     #ex3()
+
+    print("\n--- EJERCICIO 4: MOSAICO CON N IMÁGENES ---\n")
+
+    print("Yosemite 1-4...\n")
+    ims = [read_im(PATH + "{}{}.jpg".format("yosemite", i), 1) for i in range(1, 5)]
+    ex4(ims, 1530)
+
+    print("\nYosemite 5-7...\n")
+    ims = [read_im(PATH + "{}{}.jpg".format("yosemite", i), 1) for i in range(5, 8)]
+    ex4(ims, 1150)
 
 if __name__ == "__main__":
   main()
