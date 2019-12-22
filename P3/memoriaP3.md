@@ -32,7 +32,7 @@ El programa desarrollado va ejecutando desde una función `main` los distintos a
 
 En este ejercicio perseguimos utilizar el detector de Harris para detectar esquinas sobre la pirámide Gaussiana de una imagen. Mostraremos los resultados obtenidos sobre las imágenes `Yosemite1.jpg` y `Yosemite2.jpg`.
 
-Disponemos de funciones ya utilizadas en práticas anteriores, cuya implementación no comentaremos, para realizar las siguientes funciones específicas: supresión de no máximos, pirámide gaussiana, filtro gaussiano, cálculo de derivadas, y completar una imagen con $0$s hasta tener tamaño potencia de $2$ en ambas dimensiones.
+Disponemos de funciones ya utilizadas en práticas anteriores, cuya implementación no comentaremos, para realizar las siguientes tareas específicas: supresión de no máximos, pirámide gaussiana, filtro gaussiano, cálculo de derivadas, y completar una imagen con $0$s hasta tener tamaño potencia de $2$ en ambas dimensiones.
 
 ## Extracción de puntos
 
@@ -119,7 +119,7 @@ Para la supresión de no máximos hemos fijado el umbral en `THRESHOLD = 10`, ob
 
 Podemos observar que los puntos detectados son representativos de cada escala, pues marcan las esquinas existentes en toda la imagen y no solo en una parte. Sin embargo, muchos más puntos saturarían la imagen y no permitirían apreciar las esquinas más destacadas, sobre todo en los niveles más altos. En conjunto podemos ver que se obtiene un número suficiente de puntos.
 
-Los resultados obtenidos y la valoración son similares para la imagen `Yosemite2.jpg`. El hecho de comenzar con un tamaño de ventana más grande para la supresión de no máximos e ir disminuyéndolo después nos permite encontrar cada vez más detalles (por ejemplo, las esquinas correspondientes a las nubes).
+Los resultados obtenidos y la valoración son similares para la imagen `Yosemite2.jpg`. Vemos que conforme aumentamos de octava detectamos esquinas correspondientes a lugares más detallados de la imagen, como por ejemplo las que aparecen en las nubes.
 
 ![Puntos detectados en cada octava en Yosemite2.jpg](resources/1-y2-scale.jpg)
 
@@ -127,7 +127,7 @@ Los resultados obtenidos y la valoración son similares para la imagen `Yosemite
 
 ## Refinamiento de coordenadas
 
-Una vez hemos detectado los puntos de interés, queremos refinar las coordenadas hasta niveles *subpixel* (es decir, en precisión decimal). Esto es así porque en usos posteriores estos puntos de interés deben ser muy precisos si queremos obtener un resultado estéticamente agradable.
+Una vez hemos detectado los puntos de interés, queremos refinar las coordenadas hasta niveles *subpixel* (es decir, en precisión decimal). Esto es así porque en aplicaciones posteriores estos puntos de interés deben ser muy precisos si queremos obtener un resultado estéticamente agradable.
 
 Para ello disponemos de la función `cornerSubPix`, a la que le pasamos una lista con las coordenadas detectadas y un tamaño de ventana, y se encarga de refinar las coordenadas de las esquinas en un entorno definido por dos veces el tamaño proporcionado, hasta cumplir un cierto criterio de parada. En nuestro caso, el criterio de parada es superar las 100 iteraciones, o que no difieran las coordenadas en más de 0.01 en una iteración.
 
@@ -278,7 +278,7 @@ canvas = cv2.warpPerspective(im2, H21, (w, h), dst = canvas,
                              borderMode = cv2.BORDER_TRANSPARENT)
 ```
 
-Es posible que al aplicar la homografía obtengamos puntos que no se encuentran en la otra imagen, por lo que sería necesario extrapolar.
+Es posible que al aplicar la homografía obtengamos puntos que no se encuentran en la otra imagen, por lo que se realiza extrapolación de píxeles.
 
 ![Mosaico construido a partir de Yosemite1.jpg y Yosemite2.jpg](resources/3.jpg)
 
@@ -294,8 +294,8 @@ La estrategia que seguiremos ahora es ajustar manualmente un canvas en el que qu
 k = len(ims) // 2
 
 # Las dimensiones del canvas son (h, w)
-tx = (w - ims[central].shape[1]) / 2
-ty = (h - ims[central].shape[0]) / 2
+tx = (w - ims[k].shape[1]) / 2
+ty = (h - ims[k].shape[0]) / 2
 H0 = np.array([[1, 0, tx], [0, 1, ty], [0, 0, 1]])
 
 # Trasladamos la imagen central al mosaico
@@ -326,7 +326,7 @@ A la hora de trasladar las imágenes al mosaico, tomaremos la central como refer
 - Si $i < k$, realizamos la cadena de homografías $H_{i,i+1} \circ \cdots \circ H_{k-1, k} \circ H_0$, que resulta en el producto matricial $$H_0 \cdot H_{k-1, k} \cdots H_{i, i+1}$$
 - Si $i > k$, realizamos la cadena de homografías $H_{i,i-1} \circ \cdots \circ H_{k+1, k} \circ H_0$, que resulta en el producto matricial $$H_0 \cdot H_{k+1, k} \cdots H_{i, i-1}$$
 
-Aprovechamos que podemos reutilizar las transformaciones calculadas. Vamos recorriendo las imágenes por parejas, comenzando por las que rodean a la imagen central, y avanzando hacia los extremos. En cada paso componemos con la homografía correspondiente y proyectamos las imágenes en el canvas mediante la homografía resultante. Recordamos que las homografías tienen distinto significado a un lado y a otro de la imagen central.
+Aprovechamos que podemos reutilizar las transformaciones calculadas. Vamos recorriendo las imágenes por parejas, comenzando por las que rodean a la imagen central, y avanzando hacia los extremos. En cada paso componemos con la homografía correspondiente y proyectamos las imágenes en el *canvas* mediante la homografía resultante. Recordamos que las homografías tienen distinto significado a un lado y a otro de la imagen central.
 
 ```python
 # Trasladamos el resto de imágenes al mosaico
@@ -355,7 +355,7 @@ Podemos ver cómo las imágenes no encajan perfectamente. A la hora de estimar l
 
 ![Mosaico a partir de mosaico{002-011}.jpg](resources/4-mos.jpg)
 
-Por último, construimos un mosaico con 10 fotos tomadas cerca de la ETSIIT. En este caso el mosaico parece encajar mejor, y aunque no podemos evitar el efecto visual en el que la imagen se curva, no se notan tanto los cambios entre una imagen y otra, y tampoco hay mucho solapamiento. 
+Por último, construimos un mosaico con 10 fotos tomadas cerca de la ETSIIT. En este caso el mosaico parece encajar mejor, y aunque no podemos evitar el efecto visual en el que la imagen se curva, no se notan tanto los cambios entre una imagen y otra, y tampoco hay mucho solapamiento.
 
 # Bibliografía
 
