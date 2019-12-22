@@ -273,7 +273,7 @@ H21 = get_homography(im2, im1)
 Esta función utiliza la relación entre los puntos dados para obtener los coeficientes de la homografía resolviendo un problema de mínimos cuadrados. Le decimos que emplee el método RANSAC para conseguir una estimación robusta. Ya solo nos queda trasladar la segunda imagen al mosaico utilizando la homografía encontrada. Para ello empleamos la función `warpPerspective`, que aplica una homografía a una imagen guardando el resultado en un destino que se pasa como parámetro (en este caso, el *canvas*):
 
 ```python
-# Indicamos como método de extrapolación BORDER_TRANSPARENT
+# Elegimos bordes transparentes con el método de extrapolación BORDER_TRANSPARENT
 canvas = cv2.warpPerspective(im2, H21, (w, h), dst = canvas,
                              borderMode = cv2.BORDER_TRANSPARENT)
 ```
