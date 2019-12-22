@@ -467,6 +467,19 @@ def ex2():
 # EJERCICIO 3: MOSAICO CON 2 IMÁGENES
 #
 
+def get_homography(im1, im2):
+    """Estima una homografía de 'im1' a 'im2'."""
+
+    kp1, desc1 = akaze_descriptor(im1)
+    kp2, desc2 = akaze_descriptor(im2)
+
+    matches = matches_lowe_2nn(desc1, desc2)
+
+    query = np.array([kp1[match.queryIdx].pt for match in matches])
+    train = np.array([kp2[match.trainIdx].pt for match in matches])
+
+    return cv2.findHomography(query, train, cv2.RANSAC)[0]
+
 def ex3():
     """Ejemplo de ejecución del ejercicio 3."""
 
@@ -481,16 +494,7 @@ def ex3():
     canvas[:im1.shape[0], :im1.shape[1]] = im1
 
     # Calculamos la homografía de la segunda imagen a la primera
-    kp1, desc1 = akaze_descriptor(im1)
-    kp2, desc2 = akaze_descriptor(im2)
-
-    matches = matches_lowe_2nn(desc2, desc1)
-
-    query = np.array([kp2[match.queryIdx].pt for match in matches])
-    train = np.array([kp1[match.trainIdx].pt for match in matches])
-
-    # Coincide en este caso con la homografía que lleva la segunda imagen al mosaico
-    H21 = cv2.findHomography(query, train, cv2.RANSAC)[0]
+    H21 = get_homography(im2, im1)
 
     # Trasladamos la segunda imagen al mosaico
     canvas = cv2.warpPerspective(im2, H21, (w, h), dst = canvas, borderMode = cv2.BORDER_TRANSPARENT)
@@ -502,15 +506,14 @@ def ex3():
 # EJERCICIO 4: MOSAICO CON N IMÁGENES
 #
 
-def ex4(ims, w):
+def ex4(ims, h, w):
     """Ejemplo de ejecución del ejercicio 4.
         - ims: imágenes para construir el mosaico.
-        - w: anchura del mosaico."""
+        - h, w: altura y anchura del mosaico."""
 
     central = len(ims) // 2
 
-    # Definimos un canvas suponiendo que las imágenes tienen la misma altura
-    h = ims[0].shape[0] + 20
+    # Definimos un canvas
     canvas = np.zeros((h, w, 3), dtype = np.float32)
 
     # Calculamos la homografía (traslación) que lleva la imagen central al mosaico
@@ -518,34 +521,30 @@ def ex4(ims, w):
     ty = (h - ims[central].shape[0]) / 2
     H0 = np.array([[1, 0, tx], [0, 1, ty], [0, 0, 1]])
 
+    # Trasladamos la imagen central al mosaico
+    canvas = cv2.warpPerspective(ims[central], H0, (w, h), dst = canvas, borderMode = cv2.BORDER_TRANSPARENT)
+
     # Calculamos las homografías entre cada dos imágenes
     homographies = []
     for i in range(len(ims)):
         if i != central:
             j = i + 1 if i < central else i - 1
-
-            kp1, desc1 = akaze_descriptor(ims[i])
-            kp2, desc2 = akaze_descriptor(ims[j])
-
-            matches = matches_lowe_2nn(desc1, desc2)
-
-            query = np.array([kp1[match.queryIdx].pt for match in matches])
-            train = np.array([kp2[match.trainIdx].pt for match in matches])
-
-            homographies.append(cv2.findHomography(query, train, cv2.RANSAC)[0])
+            homographies.append(get_homography(ims[i], ims[j]))
 
         else: # No se usa la posición central
             homographies.append(np.array([]))
 
-    # Trasladamos cada imagen al mosaico
-    for i in range(len(ims)):
-        H = H0
-        
-        for j in range(abs(i - central)):
-            k = central - j - 1 if i < central else central + j + 1
-            H = H @ homographies[k]
-
+    # Trasladamos el resto de imágenes al mosaico
+    H = H0
+    G = H0
+    for i in range(central)[::-1]:
+        H = H @ homographies[i]
         canvas = cv2.warpPerspective(ims[i], H, (w, h), dst = canvas, borderMode = cv2.BORDER_TRANSPARENT)
+
+        j = 2 * central - i
+        if j < len(ims):
+            G = G @ homographies[j]
+            canvas = cv2.warpPerspective(ims[j], G, (w, h), dst = canvas, borderMode = cv2.BORDER_TRANSPARENT)
 
     # Mostramos el mosaico
     print_im(canvas)
@@ -558,23 +557,28 @@ def main():
     """Ejecuta la práctica 3 paso a paso. Cada apartado es una llamada a una función."""
 
     print("--- EJERCICIO 1: DETECTOR DE HARRIS ---\n")
-    #ex1()
+    ex1()
 
     print("\n--- EJERCICIO 2: CORRESPONDENCIAS ENTRE KEYPOINTS ---\n")
-    #ex2()
+    ex2()
 
     print("\n--- EJERCICIO 3: MOSAICO CON 2 IMÁGENES ---\n")
-    #ex3()
+    ex3()
 
     print("\n--- EJERCICIO 4: MOSAICO CON N IMÁGENES ---\n")
 
     print("Yosemite 1-4...\n")
     ims = [read_im(PATH + "{}{}.jpg".format("yosemite", i), 1) for i in range(1, 5)]
-    ex4(ims, 1530)
+    ex4(ims, ims[0].shape[0] + 20, 1530)
 
     print("\nYosemite 5-7...\n")
     ims = [read_im(PATH + "{}{}.jpg".format("yosemite", i), 1) for i in range(5, 8)]
-    ex4(ims, 1150)
+    ex4(ims, ims[0].shape[0] + 20, 1150)
+
+    print("\nMosaico002-011...\n")
+    ims = [read_im(PATH + "{}00{}.jpg".format("mosaico", i), 1) for i in range(2, 10)] + \
+          [read_im(PATH + "{}0{}.jpg".format("mosaico", i), 1) for i in range(10, 12)]
+    ex4(ims, 550, 1000)
 
 if __name__ == "__main__":
   main()
