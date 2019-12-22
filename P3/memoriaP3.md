@@ -20,4 +20,4 @@ header-includes:
 
 # Ejercicio 2
 
-Se usa distancia euclídea
+Se usa distancia hamming (descriptoresbinarios por defecto)

@@ -1,7 +1,3 @@
-PUNTO 1: variar el tamaño de ventana de la supresión de no máximos en cada escala (empezar con uno grande e ir disminuyendo, por ejemplo 7x7).
-
-Para el d), usar la función cornersubpix en cada punto, y pasarle un tamaño de ventana que sea el mismo que se usó en la supresión de no máximos (más o menos), para que cada punto esté aislado en una ventana. Interpolar en la ventana para pintar las coord. subpixel.
-
 PUNTO 2:
 https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_feature2d/py_matcher/py_matcher.html
 

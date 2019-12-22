@@ -24,8 +24,8 @@ import random
 
 PATH = "imagenes/"    # Carpeta de imágenes
 WINDOW_SIZE = 3       # Tamaño de ventana para esquinas
-WINDOW_SIZE_F = 5     # Tamaño de ventana para supresión de no máximos
-THRESHOLD = 10        # Umbral para máximos en el espacio de escalas
+WINDOW_SIZE_F = 7     # Tamaño de ventana para supresión de no máximos
+THRESHOLD = 1000        # Umbral para máximos en el espacio de escalas
 NUM_MAX = 1100        # Número de máximos en el espacio de escalas
 ZOOM = 5              # Factor de zoom
 WIDTH, HEIGHT = 7, 7  # Tamaño por defecto del plot
@@ -211,7 +211,7 @@ def harris_detection(im, levels):
     """Realiza la detección de esquinas según el descriptor de Harris. Devuelve las imágenes
        con los puntos dibujados en cada escala, la imagen original con todos los puntos,
        y un vector de los puntos detectados.
-        - im: imagen original.
+        - im: imagen original en escala de grises.
         - levels: niveles para la pirámide Gaussiana."""
 
     im_scale_kp = []
@@ -256,7 +256,7 @@ def harris_detection(im, levels):
             norm = np.sqrt(im_dx[s][p] * im_dx[s][p] + im_dy[s][p] * im_dy[s][p])
             angle_sin = im_dy[s][p] / norm if norm > 0 else 0.0
             angle_cos = im_dx[s][p] / norm if norm > 0 else 0.0
-            angle = np.degrees(np.arctan2(angle_sin, angle_cos))
+            angle = np.degrees(np.arctan2(angle_sin, angle_cos)) + 180
 
             # Creamos una estructura KeyPoint con cada punto que sobrevive
             keypoints.append(cv2.KeyPoint(p[1], p[0], WINDOW_SIZE * (levels - s + 1) / 1.3, _angle = angle))
@@ -274,9 +274,11 @@ def harris_detection(im, levels):
         # Guardamos el resultado de la octava actual
         im_scale_kp.append(im_kp.astype(np.float32)[:orig_rows // 2 ** s, :orig_cols // 2 ** s])
 
+        return im_scale_kp, im_scale_kp, keypoints_orig  #TODO cambiar umbral a 10
+
         # Actualizamos el tamaño de ventana y el número de puntos a detectar
         if window > 3:
-            window = window - 1
+            window = window - 2
         if num_points > 400:
             num_points = int(num_points / 1.5)
 
@@ -294,7 +296,7 @@ def refine_corners(im, keypoints):
     """Calcula las coordenadas subpixel de puntos que representan esquinas. Devuelve una
        lista de 3 imágenes interpoladas (en un entorno 10x10 con zoom de 5x) con las
        coordenadas originales y las refinadas de un punto (cada una).
-        - im: imagen original.
+        - im: imagen original en escala de grises.
         - keypoints: puntos sobre los que corregir las coordenadas."""
 
     res = []
@@ -312,7 +314,8 @@ def refine_corners(im, keypoints):
     count = 0
     while count < 3:
         index = random.randint(0, len(points) - 1)
-        if (points[index][:2] != corners[index][0][:2]).any():
+        if index not in selected_points and \
+           (points[index][:2] != corners[index][0][:2]).any():
             selected_points.append(index)
             count = count + 1
 
@@ -328,36 +331,88 @@ def refine_corners(im, keypoints):
         im_rgb = cv2.resize(im_rgb, None, fx = ZOOM, fy = ZOOM)
 
         # Dibujamos en rojo el punto original
-        im_rgb = cv2.circle(im_rgb, (ZOOM * y, ZOOM * x), 2, (255, 0, 0))
+        im_rgb = cv2.circle(im_rgb, (ZOOM * y, ZOOM * x), 3, (255, 0, 0))
 
         # Dibujamos en verde el punto corregido
-        im_rgb = cv2.circle(im_rgb, (int(ZOOM * ry), int(ZOOM * rx)), 2, (0, 255, 0))
+        im_rgb = cv2.circle(im_rgb, (int(ZOOM * ry), int(ZOOM * rx)), 3, (0, 255, 0))
 
-        # Seleccionamos una ventana 10x10 alrededor del punto original
+        # Seleccionamos una ventana 11x11 alrededor del punto original
         t = ZOOM * (x - 5) if ZOOM * (x - 5) >= 0 else 0
-        b = ZOOM * (x + 5)
+        b = ZOOM * (x + 5 + 1)
         l = ZOOM * (y - 5) if ZOOM * (y - 5) >= 0 else 0
-        r = ZOOM * (y + 5)
+        r = ZOOM * (y + 5 + 1)
         window = im_rgb[t:b, l:r]
 
         res.append(window)
 
     return res
 
+    r = 4 # Radius from the center
+    z = 5 # Zoom
+    result = np.zeros(((2 * r + 1) * z, (2 * r + 1) * z * random_points, 3), dtype = np.uint8)
+
+    for i in range(random_points):
+        subregion = np.zeros((r * z, r * z, 3), dtype = np.uint8)
+        # First Point
+        rand = random_unique_ints[i]
+        # Pixels
+        mx = int(maximums[rand].pt[0])
+        my = int(maximums[rand].pt[1])
+        # Subpixels
+        smx = subpixels[i][0]
+        smy = subpixels[i][1]
+
+        # dx, dy
+        dx = smx - mx
+        dy = smy - my
+
+
+        # Take rubregion
+        subregion = img[my - r: my + r + 1, mx - r : mx + r + 1]
+        # Zoom it
+        subregion = cv2.resize(subregion, None, fx = z, fy = z, interpolation = cv2.INTER_NEAREST)
+        subregion = cv2.cvtColor(subregion, cv2.COLOR_GRAY2BGR)
+
+        # Draw Pixel Corner
+        cv2.drawMarker(
+            subregion,
+            (r * z, r * z),
+            (0, 0, 255),
+            markerType = cv2.MARKER_STAR,
+            markerSize = z,
+            thickness = 1,
+            line_type = cv2.LINE_AA
+        )
+
+        # Draw Sub Cornel
+        cv2.drawMarker(
+            subregion,
+            (int((r + dx) * z), int((r + dy) * z)),
+            (0, 255, 0),
+            markerType = cv2.MARKER_DIAMOND,
+            markerSize = z,
+            thickness = 1,
+            line_type = cv2.LINE_AA
+        )
+
+        result[:, i * subregion.shape[0] : (i + 1) * subregion.shape[0], :] = subregion
+
 def ex1():
     """Ejemplo de ejecución del ejercicio 1."""
 
-    im1 = read_im(PATH + "yosemite1.jpg")
+    im1 = read_im(PATH + "Tablero1.jpg")
     im2 = read_im(PATH + "yosemite2.jpg")
 
     print("Detectando puntos Harris en yosemite1.jpg...\n")
     h1_scale, h1_orig, h1_keypoints = harris_detection(im1, 3)
-    print_im(format_pyramid(h1_scale))
-    print_im(h1_orig)
+    #print_im(format_pyramid(h1_scale))
+    #print_im(h1_orig)
 
     print("\nMostrando coordenadas subpíxel corregidas en yosemite1.jpg...\n")
     subpix1 = refine_corners(im1, h1_keypoints)
     print_multiple_im(subpix1)
+
+    exit()
 
     print("\nDetectando puntos Harris en yosemite2.jpg...\n")
     h2_scale, h2_orig, h2_keypoints = harris_detection(im2, 3)
@@ -377,26 +432,24 @@ def akaze_descriptor(im):
 
     return cv2.AKAZE_create().detectAndCompute(im, None)
 
-def random_matches_bruteforce(desc1, desc2, n):
-    """Devuelve un número 'n' de matches entre los descriptores de dos imágenes por el
-       método de fuerza bruta con crossCheck, escogidos aleatoriamente."""
+def matches_bruteforce(desc1, desc2):
+    """Devuelve los matches entre los descriptores de dos imágenes por el
+       método de fuerza bruta con crossCheck"""
 
     # Creamos el objeto BFMatcher con crossCheck
-    bf = cv2.BFMatcher_create(crossCheck = True)
+    bf = cv2.BFMatcher_create(normType = cv2.NORM_HAMMING, crossCheck = True)
 
     # Calculamos los matches entre los descriptores de las imágenes
     matches = bf.match(desc1, desc2)
 
-    # Nos quedamos como mucho con 'n' matches aleatorios
-    n = min(n, len(matches))
-    return random.sample(matches, n)
+    return matches
 
-def random_matches_2nn(desc1, desc2, n):
-    """Devuelve un número 'n' de matches entre los descriptores de dos imágenes por el
-       método de Lowe-Average-2NN, escogidos aleatoriamente."""
+def matches_lowe_2nn(desc1, desc2):
+    """Devuelve los matches entre los descriptores de dos imágenes por el
+       método de Lowe-Average-2NN"""
 
     # Creamos el objeto BFMatcher
-    bf = cv2.BFMatcher_create()
+    bf = cv2.BFMatcher_create(normType = cv2.NORM_HAMMING)
 
     # Calculamos los 2 mejores matches entre los descriptores de las imágenes
     matches = bf.knnMatch(desc1, desc2, k = 2)
@@ -407,9 +460,7 @@ def random_matches_2nn(desc1, desc2, n):
         if m1.distance < 0.75 * m2.distance:
             selected.append(m1)
 
-    # Nos quedamos como mucho con 'n' matches aleatorios
-    n = min(n, len(selected))
-    return random.sample(selected, n)
+    return selected
 
 def get_matches(im1, im2):
     """Devuelve dos imágenes con las correspondencias entre los keypoints
@@ -421,14 +472,20 @@ def get_matches(im1, im2):
     kp2, desc2 = akaze_descriptor(im2)
 
     # Obtenemos 100 matches aleatorios con BruteForce + crossCheck
-    matches_bf = random_matches_bruteforce(desc1, desc2, 100)
+    matches_bf = matches_bruteforce(desc1, desc2)
+    n = min(100, len(matches_bf))
+    matches_bf = random.sample(matches_bf, n)
 
+    # Dibujamos las corresondencias
     im_matches_bf = cv2.drawMatches(im1, kp1, im2, kp2, matches_bf, None,
                                     flags = cv2.DRAW_MATCHES_FLAGS_NOT_DRAW_SINGLE_POINTS)
 
     # Obtenemos 100 matches aleatorios con Lowe-Average-2NN
-    matches_2nn = random_matches_2nn(desc1, desc2, 100)
+    matches_2nn = matches_lowe_2nn(desc1, desc2)
+    n = min(100, len(matches_2nn))
+    matches_2nn = random.sample(matches_2nn, n)
 
+    # Dibujamos las corresondencias
     im_matches_2nn = cv2.drawMatches(im1, kp1, im2, kp2, matches_2nn, None,
                                     flags = cv2.DRAW_MATCHES_FLAGS_NOT_DRAW_SINGLE_POINTS)
 
@@ -464,13 +521,39 @@ def ex2():
 # EJERCICIO 3: MOSAICO CON 2 IMÁGENES
 #
 
+def canvas_central_homography(h, w):
+    pass
+
 def ex3():
     """Ejemplo de ejecución del ejercicio 3."""
 
-    im1 = read_im(PATH + "yosemite1.jpg").astype(np.uint8)
-    im2 = read_im(PATH + "yosemite2.jpg").astype(np.uint8)
+    im1 = read_im(PATH + "yosemite1.jpg", 1)
+    im2 = read_im(PATH + "yosemite2.jpg", 1)
 
+    # Definimos un canvas
+    h, w = im1.shape[0], 940
+    canvas = np.zeros((h, w, 3), dtype = np.float32)
 
+    # La homografía que lleva la primera imagen al mosaico es la identidad
+    canvas[:im1.shape[0], :im1.shape[1]] = im1
+
+    # Calculamos la homografía de la segunda imagen a la primera
+    kp1, desc1 = akaze_descriptor(im1)
+    kp2, desc2 = akaze_descriptor(im2)
+
+    matches = matches_lowe_2nn(desc2, desc1)
+
+    query = np.array([kp2[match.queryIdx].pt for match in matches])
+    train = np.array([kp1[match.trainIdx].pt for match in matches])
+
+    # Coincide en este caso con la homografía que lleva la segunda imagen al mosaico
+    H21 = cv2.findHomography(query, train, cv2.RANSAC, 1)[0]
+
+    # Trasladamos la segunda imagen al mosaico
+    canvas = cv2.warpPerspective(im2, H21, (w, h), dst = canvas, borderMode = cv2.BORDER_TRANSPARENT)
+
+    # Mostramos el mosaico
+    print_im(canvas)
 
 #
 # FUNCIÓN PRINCIPAL
@@ -480,10 +563,13 @@ def main():
     """Ejecuta la práctica 3 paso a paso. Cada apartado es una llamada a una función."""
 
     print("--- EJERCICIO 1: DETECTOR DE HARRIS ---\n")
-    #ex1()
+    ex1()
 
-    print("--- EJERCICIO 2: CORRESPONDENCIAS ENTRE KEYPOINTS ---\n")
+    print("\n--- EJERCICIO 2: CORRESPONDENCIAS ENTRE KEYPOINTS ---\n")
     #ex2()
+
+    print("\n--- EJERCICIO 3: MOSAICO CON 2 IMÁGENES ---\n")
+    #ex3()
 
 if __name__ == "__main__":
   main()
