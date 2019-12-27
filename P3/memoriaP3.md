@@ -314,7 +314,7 @@ Es decir, para las imágenes a la izquierda de la central queremos estimar la ho
 homographies = []
 for i in range(len(ims)):
     if i != k:
-        j = i + 1 if i < central else i - 1
+        j = i + 1 if i < k else i - 1
         homographies.append(get_homography(ims[i], ims[j]))
 
     else: # No se usa la posición central
@@ -332,12 +332,12 @@ Aprovechamos que podemos reutilizar las transformaciones calculadas. Vamos recor
 # Trasladamos el resto de imágenes al mosaico
 H = H0
 G = H0
-for i in range(central)[::-1]:
+for i in range(k)[::-1]:
     H = H @ homographies[i]
     canvas = cv2.warpPerspective(ims[i], H, (w, h), dst = canvas,
                                  borderMode = cv2.BORDER_TRANSPARENT)
 
-    j = 2 * central - i
+    j = 2 * k - i
     if j < len(ims):
         G = G @ homographies[j]
         canvas = cv2.warpPerspective(ims[j], G, (w, h), dst = canvas,
