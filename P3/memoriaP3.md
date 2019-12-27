@@ -313,7 +313,7 @@ Es decir, para las imágenes a la izquierda de la central queremos estimar la ho
 # Calculamos las homografías entre cada dos imágenes
 homographies = []
 for i in range(len(ims)):
-    if i != central:
+    if i != k:
         j = i + 1 if i < central else i - 1
         homographies.append(get_homography(ims[i], ims[j]))
 
@@ -323,8 +323,8 @@ for i in range(len(ims)):
 
 A la hora de trasladar las imágenes al mosaico, tomaremos la central como referencia. La estrategia para trasladar la imagen $I_i$ será llevarla mediante una composición de homografías convenientes a la imagen $I_k$, para posteriormente componer con la traslación de esta al mosaico, $H_0$. De nuevo diferenciamos dos casos:
 
-- Si $i < k$, realizamos la cadena de homografías $H_{i,i+1} \circ \cdots \circ H_{k-1, k} \circ H_0$, que resulta en el producto matricial $$H_0 \cdot H_{k-1, k} \cdots H_{i, i+1}$$
-- Si $i > k$, realizamos la cadena de homografías $H_{i,i-1} \circ \cdots \circ H_{k+1, k} \circ H_0$, que resulta en el producto matricial $$H_0 \cdot H_{k+1, k} \cdots H_{i, i-1}$$
+- Si $i < k$, realizamos la cadena de homografías $H_0 \circ H_{k-1, k} \circ \cdots \circ H_{i, i+1}$, que resulta en el producto matricial $$H_0 H_{k-1, k} \cdots H_{i, i+1}$$
+- Si $i > k$, realizamos la cadena de homografías $H_0 \circ H_{k+1, k} \circ \cdots \circ H_{i, i-1}$, que resulta en el producto matricial $$H_0 H_{k+1, k} \cdots H_{i, i-1}$$
 
 Aprovechamos que podemos reutilizar las transformaciones calculadas. Vamos recorriendo las imágenes por parejas, comenzando por las que rodean a la imagen central, y avanzando hacia los extremos. En cada paso componemos con la homografía correspondiente y proyectamos las imágenes en el *canvas* mediante la homografía resultante. Recordamos que las homografías tienen distinto significado a un lado y a otro de la imagen central.
 
