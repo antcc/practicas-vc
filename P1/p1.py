@@ -299,7 +299,7 @@ def laplacian2D(im, sigma, size, border_type = BORDER_REPLICATE, value = 0.0):
 
     im1 = separable_convolution2D(im_smooth, vxx, v, border_type, value)
     im2 = separable_convolution2D(im_smooth, u, vyy, border_type, value)
-    laplacian = im1 + im2
+    laplacian = sigma * sigma * (im1 + im2)
 
     return abs(laplacian)
 

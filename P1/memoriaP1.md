@@ -31,13 +31,7 @@ b) en caso afirmativo, encontrar dichos vectores y aplicar la convolución a la 
 
 Para la primera parte tenemos en cuenta el siguiente resultado de álgebra lineal:
 
-**Proposición.** Sea $A$ una matriz real $n \times m$. Entonces, $\operatorname{rango}(A) = 1$ sí y solo sí existen vectores columna no nulos $u, v \in \mathbb{R}^m$ tales que $A = uv^T$.
-
-*Demostración.* Recordamos que el rango de $A$ puede verse como la dimensión de la imagen de la aplicación lineal asociada $x \mapsto Ax$, para $x \in \mathbb{R}^m$.
-
-Para ver la primera implicación, basta observar que si $A = uv^T$, entonces $Ax = (uv^T)x = u(v^Tx) = \langle v, x \rangle u$. Así, la imagen cae en una recta vectorial, luego tiene dimensión 1.
-
-Recíprocamente, si $A$ tiene rango 1 existe $u \in \mathbb{R}^m$ tal que $Ax = k(x)u$ para todo $x \in \mathbb{R}^m$, con $k(x) \in \mathbb{R}$. Aplicando esto a los vectores de la base usual de $\mathbb{R}^m$ obtenemos que cada columna de $A$ es un múltiplo de $u$, digamos $A = u(k_1 \cdots k_m)$. Tomando $v = (k_1 \cdots k_m)^T$ tenemos que $A = uv^T$, como queríamos. $\square$
+**Proposición.** Sea $A$ una matriz real $n \times m$. Entonces, $\operatorname{rango}(A) = 1$ si y solo si existen vectores columna no nulos $u \in \mathbb{R}^n, v \in \mathbb{R}^m$ tales que $A = uv^t$.
 
 Aprovecharemos también la descomposición en valores singulares de una matriz real **[1]**. Esta descomposición nos permite escribir $A = U\Sigma V^T$, donde $U, V$ son matrices ortogonales y $\Sigma$ es una matriz (rectangular) diagonal con valores no negativos. La propiedad fundamental que usaremos de esta descomposición es que el rango de $A$ coincide con el número de elementos no nulos en la diagonal de $\Sigma$. En el caso en que $A$ tenga rango 1, las primeras columnas de $U$ y $V$ (convenientemente ordenadas) serán los vectores que forman la descomposición de $A$ como producto de dos vectores (el resto de columnas son nulas), salvo una constante multiplicativa. Si queremos recuperar exactamente la matriz $A$, notamos que
 $$A = U \operatorname{diag}\{s_1, 0, \dots, 0\}V^T \implies A = s_1 U_1V_1^T,$$
@@ -143,12 +137,12 @@ vxx, v = get_derivatives2D(2, 0, size)
 u, vyy = get_derivatives2D(0, 2, size)
 im1 = separable_convolution2D(im_smooth, vxx, v)
 im2 = separable_convolution2D(im_smooth, u, vyy,)
-laplacian = im1 + im2
+laplacian = sigma * sigma * (im1 + im2)
 ```
 
 Mediante este filtro podemos detectar algunos bordes, pues en los sitios donde haya un gran cambio de intensidad en una dirección, el operador será negativo a un lado y positivo al otro. De nuevo visualizamos el valor absoluto de la imagen resultante para no perder los valores negativos de cambio.
 
-Notamos que este filtro ya está normalizado en escala, al estarlo el filtro Gaussiano que aplicamos inicialmente.
+Notamos que normalizamos el filtro en escala, para evitar deformaciones con valores muy grandes de $\sigma$.
 
 ![Ejemplos de filtrado con Laplaciana-de-Gaussiana.](img/ex1b_1.jpg)
 
@@ -233,8 +227,6 @@ Hemos elegido 6 colores distintos para las 6 primera escalas, que luego van cicl
 Observamos en la Figura 7 que la detección de regiones dista de ser perfecta, si bien parece que acierta al detectar los bordes más notables en las imágenes (por ejemplo, los bigotes, ojos y orejas del gato). Al aumentar el número de escalas se encuentran regiones que previamente no se detectaban. La elección inicial de $\sigma$ también afecta a la cantidad de puntos detectada en las escalas, que disminuye más rápidamente conforme mayor sea $\sigma$. Esto tiene sentido, ya que se está realizando un alisado más agresivo que elimina los detalles de las imágenes.
 
 Podríamos intentar ajustar mejor el valor del umbral (por defecto 0.05) y el número máximo de puntos que elegimos en cada escala, pues una pequeña variación en estos parámetros hace que las regiones detectadas sean completamente distintas.
-
-\newpage
 
 # Ejercicio 3
 
